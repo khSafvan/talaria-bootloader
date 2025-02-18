@@ -1,5 +1,5 @@
 ARCH = x86_64
-TARGET = visor_x64.efi
+TARGET = talaria_x64.efi
 BUILD_DIR = build
 
 ifeq ($(origin CC),default)
@@ -28,7 +28,7 @@ CRT0        ?= $(firstword $(wildcard \
 GNU_EFI_LIB ?= $(dir $(CRT0))
 
 VERS = efi.vers
-LDS  = visor_x86_64.lds
+LDS  = talaria_x86_64.lds
 
 EFI_LDFLAGS = -nostdlib -znocombreloc -z notext -T $(LDS) -shared \
               -Bsymbolic -Wl,--version-script=$(VERS) -L $(GNU_EFI_LIB) \
@@ -70,10 +70,10 @@ bakefont:
 
 $(TARGET): $(OBJS)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(EFI_LDFLAGS) -o $(BUILD_DIR)/visor.so $(OBJS)
+	$(CC) $(EFI_LDFLAGS) -o $(BUILD_DIR)/talaria.so $(OBJS)
 	$(OBJCOPY) -j .text -j .sdata -j .data -j .rodata -j .dynamic \
 		   -j .dynsym  -j .dynstr -j .rel* -j .reloc \
-		   -O pei-x86-64 --subsystem=10 $(BUILD_DIR)/visor.so $(TARGET)
+		   -O pei-x86-64 --subsystem=10 $(BUILD_DIR)/talaria.so $(TARGET)
 	@printf '\000\020\000\000\014\000\000\000\000\000\000\000' > $(BUILD_DIR)/reloc.bin
 	$(OBJCOPY) --update-section .reloc=$(BUILD_DIR)/reloc.bin $(TARGET)
 	@$(MAKE) --no-print-directory check-reloc
