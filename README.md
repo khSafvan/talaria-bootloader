@@ -1,10 +1,12 @@
-# Visor 
+# Talaria (Rust Fork)
 
-A minimal, fast, modern, graphical UEFI boot manager. 
+A minimal, fast, modern, graphical UEFI boot manager — now completely rewritten in memory-safe **Rust**!
 
-Visor draws an icon-based boot menu which combines the efficiency and speed of grub with the beauty of refind, capable of booting **Linux** (EFI stub kernels / Unified Kernel Images) or chainloading other efi executables (including Windows Boot Manager)  no external dependencies, no scripting bs — just a config and ur imagination.
+> **Note**: This repository is a Rust fork of the original talaria-bootloader project by IO-ZetZor. All legacy C code has been completely replaced with a native `#![no_std]` Rust implementation.
 
-# Visor Menu
+Talaria draws an icon-based boot menu which combines the efficiency and speed of grub with the beauty of refind, capable of booting **Linux** (EFI stub kernels / Unified Kernel Images) or chainloading other efi executables (including Windows Boot Manager) no external dependencies, no scripting bs — just a config and ur imagination.
+
+# Talaria Menu
 
 <p align="center">
   <img src="docs/ss2.png" width="49%">
@@ -17,7 +19,7 @@ Visor draws an icon-based boot menu which combines the efficiency and speed of g
   Graphics Output Protocol (GOP).
 - **Fluid Animations** — smooth animations for switching between entries.  
 - **Customizable UI** — almost everything you see can be customized.
-- **Auto-detection** — if `boot.conf` is missing, Visor scans for common Linux
+- **Auto-detection** — if `boot.conf` is missing, Talaria scans for common Linux
   and Windows loaders and builds a menu automatically.
 - **Mouse & touch** — pointer cursor with single-click-to-boot, when the firmware
   exposes a pointer device.
@@ -31,119 +33,105 @@ Visor draws an icon-based boot menu which combines the efficiency and speed of g
 ## Requirements
 
 - An **x86_64 UEFI** system
-- **gnu-efi** development files.
-- **GCC** and **binutils** (`objcopy`).
-- *(Optional)* **Python 3 + Pillow** — only to re-bake a different font; the
-  default font is committed, so normal builds need neither.
+- **Rust Toolchain** (Nightly required for UEFI target compilation)
 
 ### Install dependencies
 
-| Distro            | Command                                            |
-|-------------------|----------------------------------------------------|
-| Arch              | `sudo pacman -S gnu-efi base-devel`                |
-| Debian / Ubuntu   | `sudo apt install gnu-efi build-essential`         |
-| Fedora            | `sudo dnf install gnu-efi gnu-efi-devel gcc make`  |
-| openSUSE          | `sudo zypper in gnu-efi-devel gcc make`            |
-| Void              | `sudo xbps-install gnu-efi-libs gcc make`               |
+You will need `rustup` installed on your system to compile Talaria.
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup default nightly
+rustup component add rust-src
+rustup target add x86_64-unknown-uefi
+```
 
 ---
 
 ### Quick Install
 
-Installs the build tools for your distro, downloads Visor, builds it, and
+Installs the build tools for your distro, downloads Talaria, builds it, and
 installs it — all in one go:
 
 ```sh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/IO-ZetZor/Visor-BootManager/main/get.sh)"
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/zack/talaria-bootloader/main/get.sh)"
 ```
 
 (or with `wget`)
 ```sh
-sh -c "$(wget -qO- https://raw.githubusercontent.com/IO-ZetZor/Visor-BootManager/main/get.sh)"
+sh -c "$(wget -qO- https://raw.githubusercontent.com/zack/talaria-bootloader/main/get.sh)"
 ```
 ---
 
 ## Building
 
 ```bash
-make
+cargo build --target x86_64-unknown-uefi --release
 ```
 
-This produces `visor_x64.efi` in the project root. The Makefile auto-detects
-the gnu-efi headers and `crt0-efi-x86_64.o` across distros; if yours installs
-them somewhere unusual, override the paths:
-
-```bash
-make GNU_EFI_INC=/path/to/efi CRT0=/path/to/crt0-efi-x86_64.o
-```
-
-If gnu-efi is missing, `make` stops early with an explanatory message instead
-of a cryptic compiler error.
+This produces `talaria-bootloader.efi` inside `target/x86_64-unknown-uefi/release/`.
 
 ---
 
 ### Manual install 
 
 ```bash
-git clone https://github.com/IO-ZetZor/Visor-BootManager.git
-cd Visor-BootManager
+git clone https://github.com/zack/talaria-bootloader.git
+cd talaria-bootloader
 sudo ./install.sh
 ```
-*Options:**
+**Options:**
 
 | Flag               | Effect                                                        |
 |--------------------|---------------------------------------------------------------|
 | `--esp <path>`     | Use this ESP mount point instead of auto-detecting.           |
-| `--no-build`       | Install the already-built `visor_x64.efi`.                    |
-| `--boot-entry`     | Register a `Visor` UEFI boot entry via `efibootmgr`.          |
+| `--no-build`       | Install the already-built `talaria_x64.efi`.                    |
+| `--boot-entry`     | Register a `Talaria` UEFI boot entry via `efibootmgr`.          |
 | `--no-boot-entry`  | Do not ask about creating a UEFI boot entry.                  |
-| `--sign`           | Sign Visor with `sbctl` after installing.                     |
+| `--sign`           | Sign Talaria with `sbctl` after installing.                     |
 | `--no-sign`        | Do not ask about Secure Boot signing.                         |
-| `--fs-driver <path>` | Install an EFI filesystem driver into `\EFI\visor\drivers\`. |
-| `--no-cli`         | Do not install the host-side `visor` command.                 |
+| `--fs-driver <path>` | Install an EFI filesystem driver into `\EFI\talaria\drivers\`. |
+| `--no-cli`         | Do not install the host-side `talaria` command.                 |
 | `--cli-dir <path>` | Install the host-side command somewhere other than `/usr/local/bin`. |
 | `--force-config`   | Overwrite an existing `boot.conf` with the bundled example.   |
-```
-After installing, **edit `<ESP>/EFI/visor/boot.conf`** to point at your real
+
+After installing, **edit `<ESP>/EFI/talaria/boot.conf`** to point at your real
 kernels and set your root partition.
 
-```
+### Talaria CLI
 
-### Visor CLI
-
-The installer also adds a host-side `visor` command:
+The installer also adds a host-side `talaria` command:
 
 ```bash
-visor build
-visor install --esp /boot/efi
-visor update
-visor sign --esp /boot/efi
-visor status
-visor config validate --esp /boot/efi
-visor uninstall --esp /boot/efi
-visor clean
+talaria build
+talaria install --esp /boot/efi
+talaria update
+talaria sign --esp /boot/efi
+talaria status
+talaria config validate --esp /boot/efi
+talaria uninstall --esp /boot/efi
+talaria clean
 ```
 
-`visor install` passes its arguments through to `install.sh`. `visor sign`
-signs the installed EFI binary. `visor status` reports the current install
-state. `visor config validate` checks the syntax of a config file.
+`talaria install` passes its arguments through to `install.sh`. `talaria sign`
+signs the installed EFI binary. `talaria status` reports the current install
+state. `talaria config validate` checks the syntax of a config file.
 
 ### Updating
 
 After installation, update to the latest committed version from GitHub with:
 
 ```bash
-visor update
+talaria update
 ```
 
-The updater clones `https://github.com/IO-ZetZor/Visor-BootManager` into a local
+The updater clones `https://github.com/zack/talaria-bootloader` into a local
 source checkout on first run, then uses `git pull` on later runs. It rebuilds
-Visor and runs `install.sh --no-build` without replacing your existing
-`boot.conf`. Use `visor update --esp /your/esp/mount` if ESP auto-detection is
-wrong, and `visor update --sign` if you want the updated binary signed with
+Talaria and runs `install.sh --no-build` without replacing your existing
+`boot.conf`. Use `talaria update --esp /your/esp/mount` if ESP auto-detection is
+wrong, and `talaria update --sign` if you want the updated binary signed with
 `sbctl`.
 
-```
 ### Manual installation to ESP
 
 ```bash
@@ -151,26 +139,26 @@ wrong, and `visor update --sign` if you want the updated binary signed with
 sudo mount /dev/sdXn /mnt/esp
 
 # 2. Copy the binary and assets.
-sudo mkdir -p /mnt/esp/EFI/visor/icons /mnt/esp/EFI/visor/backgrounds
-sudo cp visor_x64.efi              /mnt/esp/EFI/visor/
-sudo cp assets/icons/*.png         /mnt/esp/EFI/visor/icons/
-sudo cp assets/backgrounds/*.png   /mnt/esp/EFI/visor/backgrounds/
-sudo cp boot.conf.example          /mnt/esp/EFI/visor/boot.conf
+sudo mkdir -p /mnt/esp/EFI/talaria/icons /mnt/esp/EFI/talaria/backgrounds
+sudo cp target/x86_64-unknown-uefi/release/talaria-bootloader.efi /mnt/esp/EFI/talaria/talaria_x64.efi
+sudo cp assets/icons/*.png         /mnt/esp/EFI/talaria/icons/
+sudo cp assets/backgrounds/*.png   /mnt/esp/EFI/talaria/backgrounds/
+sudo cp boot.conf.example          /mnt/esp/EFI/talaria/boot.conf
 
 # 3. Register a boot entry (disk = whole disk, part = ESP partition number).
 sudo efibootmgr --create --disk /dev/sdX --part n \
-                --label "Visor" --loader '\EFI\visor\visor_x64.efi'
+                --label "Talaria" --loader '\EFI\talaria\talaria_x64.efi'
 ```
 
 ---
 
 ## Configuration
 
-Config lives at `\EFI\visor\boot.conf` on the ESP. A fully-commented reference
+Config lives at `\EFI\talaria\boot.conf` on the ESP. A fully-commented reference
 is in [`boot.conf.example`](boot.conf.example).
 
 **Path rules:** all paths are relative to the **root of the ESP** and use
-back-slashes, e.g. `\EFI\visor\icons\arch.png`. Colors are `#RRGGBB`.
+back-slashes, e.g. `\EFI\talaria\icons\arch.png`. Colors are `#RRGGBB`.
 
 ### Global settings
 
@@ -184,7 +172,7 @@ back-slashes, e.g. `\EFI\visor\icons\arch.png`. Colors are `#RRGGBB`.
 | `quiet`           | `1` = black screen during hand-off · `0` = show progress text.                                             |
 | `center_info`     | `1` = show selected entry details near the bottom. Path-only when `show_names=1`                           |
 | `entries_per_page`| Entries shown per page. Default `3`.                                                                       |
-| `title`           | Menu title. Empty/absent = `Visor` · `none` = no title · else verbatim.                                    |
+| `title`           | Menu title. Empty/absent = `Talaria` · `none` = no title · else verbatim.                                    |
 | `font`            | Text font. Currently `jetbrains`. Empty = default.                                                         |
 | `theme`           | Load `themes/<name>.conf`; its UI values override those in `boot.conf`. `random` = pick a random theme each boot · `cycle` = advance to the next theme each boot (saved in NVRAM). See [Themes](#themes). |
 | `remember_last`   | `1` = remember the last-booted entry and preselect it next time (NVRAM); **overrides** `default=`. `0` = always use `default=`. |
@@ -220,7 +208,7 @@ back-slashes, e.g. `\EFI\visor\icons\arch.png`. Colors are `#RRGGBB`.
 
 ### Boot entries (Examples)
 
-Visor auto-detects how to boot each one from the image
+Talaria auto-detects how to boot each one from the image
 itself: a PE image with no initrd/cmdline is chainloaded (e.g. Windows
 `bootmgfw.efi`, loaded by device path so its BCD is found); a PE UKI or EFI-stub
 kernel is started with its cmdline/initrd applied if given; a raw (non-PE) kernel
@@ -230,7 +218,7 @@ parse as aliases for `entry`, so existing configs keep working.)
 ```conf
 entry {
     name    = "Arch Linux"      # shown under the icon
-    icon    = \EFI\visor\icons\arch.png
+    icon    = \EFI\talaria\icons\arch.png
     color   = #1793D1           # optional: overrides name_color for this entry
     kernel  = \vmlinuz-linux    # EFI stub kernel or UKI .efi
     initrd  = \initramfs-linux.img        # optional (omit for a UKI)
@@ -239,7 +227,7 @@ entry {
 
 entry {
     name   = "Windows 11"
-    icon   = \EFI\visor\icons\windows.png
+    icon   = \EFI\talaria\icons\windows.png
     kernel = \EFI\Microsoft\Boot\bootmgfw.efi
 }
 ```
@@ -269,12 +257,11 @@ Leave them out (or `0`) for the defaults (`screen_height/12` and `16`).
 
 ### Using a different font
 
-The font is baked into the binary from a TTF, so a normal build needs no font
-tooling. To swap it, regenerate the atlas (needs Python 3 + Pillow) and rebuild:
+The font is baked into the binary from a TTF. To swap it, regenerate the Rust atlas using the Python script (needs Python 3 + Pillow) and rebuild:
 
 ```bash
-make bakefont FONT=/usr/share/fonts/TTF/YourFont.ttf FONT_PX=64
-make
+python3 tools/bake_font.py /usr/share/fonts/TTF/YourFont.ttf 64 jetbrains src/font_jetbrains.rs
+cargo build --target x86_64-unknown-uefi --release
 ```
 
 ### Themes
@@ -282,7 +269,7 @@ make
 Instead of scattering UI tweaks through `boot.conf`, you can keep a whole look in
 a theme file and switch with a single line.
 
-1. Create `\EFI\visor\themes\<name>.conf` on the ESP (a `themes/` folder is made
+1. Create `\EFI\talaria\themes\<name>.conf` on the ESP (a `themes/` folder is made
    for you at install time, with a sample `nord.conf`).
 2. Put any UI keys in it — the same keys used in `boot.conf` (colors, sizes,
    `icon_*`, `underline_*`, `power_position`, `background`, `title`, …).
@@ -300,7 +287,7 @@ theme=zero
 
 ```conf
 # themes/zero.conf  (overrides boot.conf's UI)
-title=Visor
+title=Talaria
 title_color=#88C0D0
 name_color=#ECEFF4
 underline_color=#A3BE8C
@@ -310,7 +297,7 @@ power_position=bottomright
 shutdown_color=#BF616A
 reboot_color=#EBCB8B
 firmware_color=#A3BE8C
-background=\EFI\visor\backgrounds\default.png
+background=\EFI\talaria\backgrounds\default.png
 ```
 
 ---
@@ -354,15 +341,15 @@ and boots with zero extra code. This is the simplest and most portable setup —
 prefer it unless you specifically want raw `vmlinuz`+`initrd` off a Linux
 filesystem.
 
-**Optional: bring-your-own filesystem driver.** Visor **ships no filesystem
-drivers** Instead it loads whatever EFI driver *you* place in **`\EFI\visor\drivers\`** — every `*.efi`
+**Optional: bring-your-own filesystem driver.** Talaria **ships no filesystem
+drivers** Instead it loads whatever EFI driver *you* place in **`\EFI\talaria\drivers\`** — every `*.efi`
 there is started at boot and connected to your disks.
 
 Obtain a driver yourself — the open-source `efifs` set provides `btrfs_x64.efi`, `ext4_x64.efi`, etc.:
 
 ```sh
-mkdir -p <ESP>/EFI/visor/drivers
-cp <your>/btrfs_x64.efi <ESP>/EFI/visor/drivers/
+mkdir -p <ESP>/EFI/talaria/drivers
+cp <your>/btrfs_x64.efi <ESP>/EFI/talaria/drivers/
 ```
 
 `boot.log` reports `drivers: started N, connecting controllers` when this works.
@@ -372,26 +359,26 @@ If Secure Boot is on, the driver must be signed/enrolled (e.g. via `sbctl`) too.
 
 ## Secure Boot
 
-Visor is Secure Boot aware. Before launching any image it asks shim's `SHIM_LOCK`
-protocol to verify it (the same trust path used when Visor is itself started by
+Talaria is Secure Boot aware. Before launching any image it asks shim's `SHIM_LOCK`
+protocol to verify it (the same trust path used when Talaria is itself started by
 `shimx64.efi`):
 
 - **PE images** (Windows Boot Manager, UKIs, EFI-stub kernels) — if shim is present
   and verification fails, the boot is refused. If shim is absent, the firmware's own
   image verification (via `LoadImage`) still applies under Secure Boot.
 - **Raw (non-PE) kernels** booted through the EFI handover protocol bypass firmware
-  verification entirely, so under Secure Boot Visor refuses them unless shim verifies
+  verification entirely, so under Secure Boot Talaria refuses them unless shim verifies
   them first.
 
 With Secure Boot **off**, everything boots as before. For a fully signed chain, sign
-`visor_x64.efi` (and any efifs driver) and enrol the keys with `sbctl`, or boot Visor
+`talaria_x64.efi` (and any efifs driver) and enrol the keys with `sbctl`, or boot Talaria
 via shim so shim validates your kernels against the enrolled db/MOK.
 
 ---
 
 ## Troubleshooting
 
-Visor writes a log to **`\EFI\visor\boot.log`** on the ESP. It is overwritten
+Talaria writes a log to **`\EFI\talaria\boot.log`** on the ESP. It is overwritten
 each boot but retains the **last 3 boots**, and logs every fallible step
 (config parse, PNG decode, image load, hand-off). Read it first when something
 fails — most problems are one descriptive line away.
