@@ -122,34 +122,80 @@ impl<'a> Default for Config<'a> {
 impl<'a> Config<'a> {
     pub fn parse_str(buf: &'a str) -> Self {
         let mut config = Config::default();
+        let mut in_entry_block = false;
+        let mut current_entry = BootEntry {
+            name: alloc::string::String::new(),
+            icon_path: None,
+            kernel_path: None,
+            initrd_path: None,
+            cmdline: None,
+            uuid: None,
+            index: 0,
+            entry_type: 0,
+            icon_size: 0,
+            color: crate::gui::COLOR_WHITE,
+            has_color: false,
+            sha256: [0; 32],
+            has_sha256: false,
+        };
         
         for line in buf.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
+
+            if line.starts_with("entry {") || line.starts_with("linux {") || line.starts_with("windows {") {
+                in_entry_block = true;
+                current_entry.name = alloc::string::String::new();
+                current_entry.icon_path = None;
+                current_entry.kernel_path = None;
+                current_entry.initrd_path = None;
+                current_entry.cmdline = None;
+                continue;
+            }
+
+            if in_entry_block && line == "}" {
+                in_entry_block = false;
+                current_entry.index = config.entries.len();
+                config.entries.push(current_entry.clone());
+                continue;
+            }
             
-            // Handle basic key=value parsing
             if let Some((key, value)) = line.split_once('=') {
                 let key = key.trim();
-                let value = value.trim();
+                let mut value = value.trim();
                 
-                match key {
-                    "timeout" => {
-                        if let Ok(v) = value.parse::<isize>() {
-                            config.timeout = v;
+                // Strip quotes if present
+                if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
+                    value = &value[1..value.len()-1];
+                }
+                
+                if in_entry_block {
+                    match key {
+                        "name" => current_entry.name = alloc::string::String::from(value),
+                        "icon" => current_entry.icon_path = Some(alloc::string::String::from(value)),
+                        "kernel" => current_entry.kernel_path = Some(alloc::string::String::from(value)),
+                        "initrd" => current_entry.initrd_path = Some(alloc::string::String::from(value)),
+                        "cmdline" => current_entry.cmdline = Some(alloc::string::String::from(value)),
+                        _ => {}
+                    }
+                } else {
+                    match key {
+                        "timeout" => {
+                            if let Ok(v) = value.parse::<isize>() {
+                                config.timeout = v;
+                            }
                         }
-                    }
-                    "quiet" => {
-                        config.quiet = value == "1" || value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("yes");
-                    }
-                    "default" => {
-                        if let Ok(v) = value.parse::<usize>() {
-                            config.default_entry = v;
+                        "quiet" => {
+                            config.quiet = value == "1" || value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("yes");
                         }
-                    }
-                    _ => {
-                        // TODO: Implement other fields
+                        "default" => {
+                            if let Ok(v) = value.parse::<usize>() {
+                                config.default_entry = v;
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
