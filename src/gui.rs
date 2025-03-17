@@ -124,7 +124,7 @@ impl<'boot> GuiState<'boot> {
             let ey = (y + h).min(self.screen_height);
             
             for j in y..ey {
-                let start = j * self.screen_width + x;
+                let start = j * self.pixels_per_scanline + x;
                 let end = start + (ex - x);
                 buf[start..end].fill(pixel);
             }
