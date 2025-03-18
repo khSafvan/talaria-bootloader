@@ -2,6 +2,7 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
+use uefi::proto::console::gop::{BltOp, BltPixel};
 
 #[derive(Clone, Copy, Default)]
 pub struct Color {
@@ -63,7 +64,7 @@ pub struct GuiState<'boot> {
     pub screen_height: usize,
     pub bpp: usize,
     pub pixels_per_scanline: usize,
-    pub backbuffer: Option<Vec<u32>>,
+    pub backbuffer: Option<Vec<BltPixel>>,
     
     pub entries: Vec<BootEntry>,
     pub selected: usize,
@@ -80,7 +81,7 @@ pub struct GuiState<'boot> {
     pub bg_color: Color,
     pub highlight_color: Color,
     
-    pub scene_cache: Option<Vec<u32>>,
+    pub scene_cache: Option<Vec<BltPixel>>,
     pub scene_valid: bool,
 }
 
@@ -112,22 +113,42 @@ impl<'boot> GuiState<'boot> {
     }
 
     pub fn init(&mut self) -> uefi::Status {
-        // Here we would use the UEFI boot services to locate the GOP protocol
-        // and initialize our backbuffer.
+        if let Some(ref gop) = self.gop {
+            let mode = gop.current_mode_info();
+            self.screen_width = mode.resolution().0;
+            self.screen_height = mode.resolution().1;
+            self.pixels_per_scanline = mode.stride();
+            
+            let size = self.screen_width * self.screen_height;
+            self.backbuffer = Some(alloc::vec![BltPixel::new(0, 0, 0); size]);
+            self.scene_cache = Some(alloc::vec![BltPixel::new(0, 0, 0); size]);
+        }
         uefi::Status::SUCCESS
     }
 
     pub fn fill_rect(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
         if let Some(buf) = &mut self.backbuffer {
-            let pixel = ((color.r as u32) << 16) | ((color.g as u32) << 8) | (color.b as u32);
+            let pixel = BltPixel::new(color.r, color.g, color.b);
             let ex = (x + w).min(self.screen_width);
             let ey = (y + h).min(self.screen_height);
             
             for j in y..ey {
-                let start = j * self.pixels_per_scanline + x;
+                let start = j * self.screen_width + x;
                 let end = start + (ex - x);
                 buf[start..end].fill(pixel);
             }
+        }
+    }
+    
+    pub fn flush(&mut self) {
+        if let (Some(gop), Some(buf)) = (self.gop.as_mut(), &self.backbuffer) {
+            let op = BltOp::BufferToVideo {
+                buffer: buf,
+                src: (0, 0),
+                dest: (0, 0),
+                dims: (self.screen_width, self.screen_height),
+            };
+            let _ = gop.blt(op);
         }
     }
     
