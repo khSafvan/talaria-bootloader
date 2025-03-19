@@ -152,10 +152,63 @@ impl<'boot> GuiState<'boot> {
         }
     }
     
-    pub fn run(&mut self) -> Option<BootEntry> {
+    pub fn run(&mut self, system_table: &mut uefi::prelude::SystemTable<uefi::prelude::Boot>) -> Option<BootEntry> {
         self.running = true;
-        // Basic stub for the main GUI loop.
-        // In reality, this waits for user input and updates the screen.
+        
+        while self.running {
+            self.flush();
+            
+            let mut events = [system_table.stdin().wait_for_key_event()];
+            let _ = system_table.boot_services().wait_for_event(&mut events);
+            
+            if let Ok(Some(key)) = system_table.stdin().read_key() {
+                match key {
+                    uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::LEFT) | 
+                    uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::UP) => {
+                        if self.selected > 0 { self.selected -= 1; }
+                        else if !self.entries.is_empty() { self.selected = self.entries.len() - 1; }
+                    }
+                    uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::RIGHT) |
+                    uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::DOWN) => {
+                        if self.selected < self.entries.len().saturating_sub(1) { self.selected += 1; }
+                        else { self.selected = 0; }
+                    }
+                    uefi::proto::console::text::Key::Printable(u) => {
+                        let ch: char = u.into();
+                        match ch {
+                            '\r' | '\n' => {
+                                if !self.entries.is_empty() {
+                                    self.running = false;
+                                    return Some(self.entries[self.selected].clone());
+                                }
+                            }
+                            's' | 'S' => {
+                                self.action = TALARIA_ACTION_SHUTDOWN;
+                                self.running = false;
+                            }
+                            'r' | 'R' => {
+                                self.action = TALARIA_ACTION_REBOOT;
+                                self.running = false;
+                            }
+                            'f' | 'F' => {
+                                self.action = TALARIA_ACTION_FIRMWARE;
+                                self.running = false;
+                            }
+                            _ => {}
+                        }
+                    }
+                    uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::ESCAPE) => {
+                        if !self.entries.is_empty() {
+                            self.selected = 0;
+                            self.running = false;
+                            return Some(self.entries[0].clone());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        
         None
     }
 }
