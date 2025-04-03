@@ -11,14 +11,12 @@ pub fn read_file_bytes(system_table: &SystemTable<Boot>, image_handle: Handle, p
     let mut fs = system_table.boot_services().get_image_file_system(image_handle).ok()?;
     let mut root = fs.open_volume().ok()?;
     
-    let mut path_buf = [0u16; 256];
-    let path_16 = uefi::CStr16::from_str_with_buf(path, &mut path_buf).ok()?;
+    let path_16 = uefi::CString16::try_from(path).ok()?;
     
-    let file_handle = root.open(path_16, FileMode::Read, FileAttribute::empty()).ok()?;
+    let file_handle = root.open(&path_16, FileMode::Read, FileAttribute::empty()).ok()?;
     let mut file = file_handle.into_regular_file()?;
     
-    let mut info_buf = [0u8; 128];
-    let info = file.get_info::<FileInfo>(&mut info_buf).ok()?;
+    let info = file.get_boxed_info::<FileInfo>().ok()?;
     let size = info.file_size() as usize;
     
     let mut buf = alloc::vec![0; size];
