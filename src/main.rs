@@ -59,6 +59,8 @@ fn main(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
         let mut gui = gui::GuiState {
             gop: Some(&mut gop_proto),
             entries: config.entries.clone(),
+            timeout: config.timeout,
+            default_entry: config.default_entry,
             ..gui::GuiState::new()
         };
         gui.init();

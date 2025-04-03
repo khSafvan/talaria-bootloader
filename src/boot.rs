@@ -42,6 +42,7 @@ pub fn boot_windows(image_handle: Handle, system_table: &mut SystemTable<Boot>, 
         Err(e) => return e.status(),
     };
     
+    drop(device_path_protocol);
     match bs.start_image(loaded_image_handle) {
         Ok(_) => Status::SUCCESS,
         Err(e) => e.status(),
@@ -95,6 +96,7 @@ pub fn boot_linux(image_handle: Handle, system_table: &mut SystemTable<Boot>, en
         }
     }
     
+    drop(device_path_protocol);
     match bs.start_image(loaded_image_handle) {
         Ok(_) => Status::SUCCESS,
         Err(e) => e.status(),

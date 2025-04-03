@@ -88,6 +88,7 @@ pub struct GuiState<'boot> {
     
     pub scene_cache: Option<Vec<BltPixel>>,
     pub scene_valid: bool,
+    pub dirty: bool,
 }
 
 impl<'boot> GuiState<'boot> {
@@ -118,6 +119,7 @@ impl<'boot> GuiState<'boot> {
             highlight_color: COLOR_BLUE,
             scene_cache: None,
             scene_valid: false,
+            dirty: true,
         }
     }
 
@@ -149,15 +151,66 @@ impl<'boot> GuiState<'boot> {
         }
     }
     
+    pub fn draw(&mut self) {
+        self.fill_rect(0, 0, self.screen_width, self.screen_height, self.bg_color);
+        // Note: Icon rendering and Text rasterization would be composited onto backbuffer here
+    }
+    
     pub fn flush(&mut self) {
-        if let (Some(gop), Some(buf)) = (self.gop.as_mut(), &self.backbuffer) {
-            let op = BltOp::BufferToVideo {
-                buffer: buf,
-                src: (0, 0),
-                dest: (0, 0),
-                dims: (self.screen_width, self.screen_height),
-            };
-            let _ = gop.blt(op);
+        if !self.dirty {
+            return;
+        }
+        self.dirty = false;
+        
+        if let (Some(gop), Some(buf), Some(cache)) = (self.gop.as_mut(), &self.backbuffer, &mut self.scene_cache) {
+            if !self.scene_valid {
+                let op = BltOp::BufferToVideo {
+                    buffer: buf,
+                    src: (0, 0),
+                    dest: (0, 0),
+                    dims: (self.screen_width, self.screen_height),
+                };
+                let _ = gop.blt(op);
+                cache.copy_from_slice(buf);
+                self.scene_valid = true;
+                return;
+            }
+            
+            let mut min_y = self.screen_height;
+            let mut max_y = 0;
+            
+            for y in 0..self.screen_height {
+                let start = y * self.screen_width;
+                let end = start + self.screen_width;
+                
+                // Compare pixels by raw bytes
+                let changed = unsafe {
+                    let buf_ptr = buf[start..end].as_ptr() as *const u8;
+                    let cache_ptr = cache[start..end].as_ptr() as *const u8;
+                    core::slice::from_raw_parts(buf_ptr, self.screen_width * 4) != core::slice::from_raw_parts(cache_ptr, self.screen_width * 4)
+                };
+                
+                if changed {
+                    if y < min_y { min_y = y; }
+                    if y > max_y { max_y = y; }
+                }
+            }
+            
+            if min_y <= max_y {
+                let height = max_y - min_y + 1;
+                let start_idx = min_y * self.screen_width;
+                let end_idx = (max_y + 1) * self.screen_width;
+                
+                let op = BltOp::BufferToVideo {
+                    buffer: &buf[start_idx..end_idx],
+                    src: (0, 0),
+                    dest: (0, min_y),
+                    dims: (self.screen_width, height),
+                };
+                let _ = gop.blt(op);
+                
+                cache[start_idx..end_idx].copy_from_slice(&buf[start_idx..end_idx]);
+            }
         }
     }
     
@@ -167,6 +220,9 @@ impl<'boot> GuiState<'boot> {
         let timeout_ticks = self.timeout * 100;
         
         while self.running {
+            if self.dirty {
+                self.draw();
+            }
             self.flush();
             let mut input_received = false;
             
@@ -179,11 +235,13 @@ impl<'boot> GuiState<'boot> {
                     uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::UP) => {
                         if self.selected > 0 { self.selected -= 1; }
                         else if !self.entries.is_empty() { self.selected = self.entries.len() - 1; }
+                        self.dirty = true;
                     }
                     uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::RIGHT) |
                     uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::DOWN) => {
                         if self.selected < self.entries.len().saturating_sub(1) { self.selected += 1; }
                         else { self.selected = 0; }
+                        self.dirty = true;
                     }
                     uefi::proto::console::text::Key::Printable(u) => {
                         let ch: char = u.into();
@@ -236,6 +294,9 @@ impl<'boot> GuiState<'boot> {
                         
                         self.cursor_x = (self.cursor_x + dx).clamp(0, self.screen_width as isize - 1);
                         self.cursor_y = (self.cursor_y + dy).clamp(0, self.screen_height as isize - 1);
+                        if dx != 0 || dy != 0 {
+                            self.dirty = true;
+                        }
                         
                         if state.left_button {
                             if !self.entries.is_empty() {
