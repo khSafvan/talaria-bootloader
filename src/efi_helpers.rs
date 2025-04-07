@@ -20,7 +20,8 @@ pub fn read_file_bytes(system_table: &SystemTable<Boot>, image_handle: Handle, p
     let size = info.file_size() as usize;
     
     let mut buf = alloc::vec![0; size];
-    file.read(&mut buf).ok()?;
+    let read_size = file.read(&mut buf).ok()?;
+    buf.truncate(read_size);
     Some(buf)
 }
 
