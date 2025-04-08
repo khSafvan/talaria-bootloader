@@ -3,6 +3,20 @@
 use alloc::vec::Vec;
 use crate::gui::{BootEntry, Color};
 
+pub fn parse_color(val: &str) -> Option<Color> {
+    let val = val.trim().trim_start_matches('#');
+    if val.len() == 6 {
+        if let Ok(r) = u8::from_str_radix(&val[0..2], 16) {
+            if let Ok(g) = u8::from_str_radix(&val[2..4], 16) {
+                if let Ok(b) = u8::from_str_radix(&val[4..6], 16) {
+                    return Some(Color { r, g, b });
+                }
+            }
+        }
+    }
+    None
+}
+
 pub struct Config<'a> {
     pub timeout: isize,
     pub default_entry: usize,
@@ -194,6 +208,12 @@ impl<'a> Config<'a> {
                                 }
                             }
                         }
+                        "color" => {
+                            if let Some(c) = parse_color(value) {
+                                current_entry.color = c;
+                                current_entry.has_color = true;
+                            }
+                        }
                         _ => {}
                     }
                 } else {
@@ -210,6 +230,19 @@ impl<'a> Config<'a> {
                             if let Ok(v) = value.parse::<usize>() {
                                 config.default_entry = v;
                             }
+                        }
+                        "bg_color" => {
+                            if let Some(c) = parse_color(value) { config.bg_color = c; }
+                        }
+                        "fg_color" | "name_color" | "title_color" => {
+                            if let Some(c) = parse_color(value) { 
+                                config.fg_color = c;
+                                config.name_color = c;
+                                config.title_color = c;
+                            }
+                        }
+                        "highlight_color" => {
+                            if let Some(c) = parse_color(value) { config.highlight_color = c; }
                         }
                         _ => {}
                     }

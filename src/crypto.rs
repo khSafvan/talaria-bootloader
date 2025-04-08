@@ -24,15 +24,13 @@ pub struct ShimLock {
     pub verify: extern "efiapi" fn(buffer: *const u8, size: u32) -> uefi::Status,
 }
 
-pub fn verify_secure_boot(system_table: &mut SystemTable<Boot>, buffer: &[u8]) -> Result<(), uefi::Status> {
-    let bs = system_table.boot_services();
-    
-    let shim_handle = match bs.get_handle_for_protocol::<ShimLock>() {
+pub fn verify_secure_boot(buffer: &[u8]) -> Result<(), uefi::Status> {
+    let shim_handle = match uefi::boot::get_handle_for_protocol::<ShimLock>() {
         Ok(h) => h,
         Err(_) => return Ok(()), // Shim not present
     };
     
-    let shim = match bs.open_protocol_exclusive::<ShimLock>(shim_handle) {
+    let shim = match uefi::boot::open_protocol_exclusive::<ShimLock>(shim_handle) {
         Ok(s) => s,
         Err(_) => return Ok(()),
     };
