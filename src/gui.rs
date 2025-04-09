@@ -59,8 +59,8 @@ pub struct BootEntry {
 // and vectors for entries and caches. We will define it as we port the GUI rendering.
 
 pub struct GuiState<'boot> {
-    pub gop: Option<&'boot mut uefi::proto::console::gop::GraphicsOutput<'boot>>,
-    pub pointer: Option<uefi::proto::ScopedProtocol<'boot, uefi::proto::console::pointer::SimplePointer>>,
+    pub gop: Option<&'boot mut uefi::proto::console::gop::GraphicsOutput>,
+    pub pointer: Option<uefi::boot::ScopedProtocol<uefi::proto::console::pointer::Pointer>>,
     
     pub screen_width: usize,
     pub screen_height: usize,
@@ -169,7 +169,7 @@ impl<'boot> GuiState<'boot> {
             if !self.scene_valid {
                 let op = BltOp::BufferToVideo {
                     buffer: buf,
-                    src: (0, 0),
+                    src: uefi::proto::console::gop::BltRegion::Full,
                     dest: (0, 0),
                     dims: (self.screen_width, self.screen_height),
                 };
@@ -206,7 +206,7 @@ impl<'boot> GuiState<'boot> {
                 
                 let op = BltOp::BufferToVideo {
                     buffer: &buf[start_idx..end_idx],
-                    src: (0, 0),
+                    src: uefi::proto::console::gop::BltRegion::Full,
                     dest: (0, min_y),
                     dims: (self.screen_width, height),
                 };
@@ -217,7 +217,7 @@ impl<'boot> GuiState<'boot> {
         }
     }
     
-    pub fn run(&mut self, system_table: &mut uefi::prelude::SystemTable<uefi::prelude::Boot>) -> Option<BootEntry> {
+    pub fn run(&mut self) -> Option<BootEntry> {
         self.running = true;
         let mut ticks: isize = 0;
         let timeout_ticks = self.timeout * 100;
@@ -229,7 +229,7 @@ impl<'boot> GuiState<'boot> {
             self.flush();
             let mut input_received = false;
             
-            let key_opt = system_table.stdin().read_key().unwrap_or(None);
+            let key_opt = uefi::system::with_stdin(|stdin| stdin.read_key().unwrap_or(None));
             
             if let Some(key) = key_opt {
                 input_received = true;
@@ -285,8 +285,8 @@ impl<'boot> GuiState<'boot> {
                 if let Ok(Some(state)) = pointer.read_state() {
                     input_received = true;
                     
-                    let dx = state.relative_movement_x as isize;
-                    let dy = state.relative_movement_y as isize;
+                    let dx = state.relative_movement[0] as isize;
+                    let dy = state.relative_movement[1] as isize;
                     
                     if self.cursor_x == -1 {
                         self.cursor_x = (self.screen_width / 2) as isize;
@@ -301,7 +301,7 @@ impl<'boot> GuiState<'boot> {
                         self.dirty = true;
                     }
                     
-                    if state.left_button {
+                    if state.button[0] {
                         if !self.entries.is_empty() {
                             self.running = false;
                             return Some(self.entries[self.selected].clone());
@@ -325,7 +325,7 @@ impl<'boot> GuiState<'boot> {
             }
             
             // Frame-rate limiter: unconditionally wait 10ms to prevent PCIe bus saturation when input is active
-            system_table.boot_services().stall(10_000);
+            uefi::boot::stall(core::time::Duration::from_micros(10_000));
         }
         
         None
