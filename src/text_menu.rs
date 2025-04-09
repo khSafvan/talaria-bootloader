@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 use uefi::proto::console::text::{Key, ScanCode};
 
-pub fn show_text_menu(system_table: &mut SystemTable<Boot>, entries: &[BootEntry], timeout: isize, default_entry: usize) -> Option<usize> {
+pub fn show_text_menu(entries: &[BootEntry], timeout: isize, default_entry: usize) -> Option<usize> {
     if entries.is_empty() {
         return None;
     }
@@ -17,25 +17,27 @@ pub fn show_text_menu(system_table: &mut SystemTable<Boot>, entries: &[BootEntry
     let timeout_ticks = timeout * 10; // 100ms per tick for text menu
     
     // Clear screen once
-    let _ = system_table.stdout().clear();
+    uefi::system::with_stdout(|stdout| { let _ = stdout.clear(); });
     let mut dirty = true;
     
     loop {
         if dirty {
-            let _ = system_table.stdout().clear();
-            let _ = write!(system_table.stdout(), "Talaria Boot Menu\n\n");
-            
-            for (i, entry) in entries.iter().enumerate() {
-                if i == selected {
-                    let _ = write!(system_table.stdout(), " > {}\n", entry.name);
-                } else {
-                    let _ = write!(system_table.stdout(), "   {}\n", entry.name);
+            uefi::system::with_stdout(|stdout| {
+                let _ = stdout.clear();
+                let _ = write!(stdout, "Talaria Boot Menu\n\n");
+                
+                for (i, entry) in entries.iter().enumerate() {
+                    if i == selected {
+                        let _ = write!(stdout, " > {}\n", entry.name);
+                    } else {
+                        let _ = write!(stdout, "   {}\n", entry.name);
+                    }
                 }
-            }
+            });
             dirty = false;
         }
         
-        let key_opt = system_table.stdin().read_key().unwrap_or(None);
+        let key_opt = uefi::system::with_stdin(|stdin| stdin.read_key().unwrap_or(None));
         
         if let Some(key) = key_opt {
             ticks = 0; // reset on input
@@ -74,6 +76,6 @@ pub fn show_text_menu(system_table: &mut SystemTable<Boot>, entries: &[BootEntry
         }
         
         // Unconditional 100ms limiter
-        system_table.boot_services().stall(100_000);
+        uefi::boot::stall(core::time::Duration::from_micros(100_000));
     }
 }
