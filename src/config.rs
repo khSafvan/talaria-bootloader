@@ -5,7 +5,7 @@ use crate::gui::{BootEntry, Color};
 
 pub fn parse_color(val: &str) -> Option<Color> {
     let val = val.trim().trim_start_matches('#');
-    if val.len() == 6 {
+    if val.len() == 6 && val.is_ascii() {
         if let Ok(r) = u8::from_str_radix(&val[0..2], 16) {
             if let Ok(g) = u8::from_str_radix(&val[2..4], 16) {
                 if let Ok(b) = u8::from_str_radix(&val[4..6], 16) {
@@ -159,13 +159,24 @@ impl<'a> Config<'a> {
                 continue;
             }
 
-            if line.starts_with("entry {") || line.starts_with("linux {") || line.starts_with("windows {") {
+            let lower = line.to_ascii_lowercase();
+            if lower.ends_with('{') && (lower.starts_with("entry") || lower.starts_with("linux") || lower.starts_with("windows")) {
                 in_entry_block = true;
-                current_entry.name = alloc::string::String::new();
-                current_entry.icon_path = None;
-                current_entry.kernel_path = None;
-                current_entry.initrd_path = None;
-                current_entry.cmdline = None;
+                current_entry = BootEntry {
+                    name: alloc::string::String::new(),
+                    icon_path: None,
+                    kernel_path: None,
+                    initrd_path: None,
+                    cmdline: None,
+                    uuid: None,
+                    index: 0,
+                    entry_type: 0,
+                    icon_size: 0,
+                    color: crate::gui::COLOR_WHITE,
+                    has_color: false,
+                    sha256: [0; 32],
+                    has_sha256: false,
+                };
                 continue;
             }
 
@@ -193,7 +204,7 @@ impl<'a> Config<'a> {
                         "initrd" => current_entry.initrd_path = Some(alloc::string::String::from(value)),
                         "cmdline" => current_entry.cmdline = Some(alloc::string::String::from(value)),
                         "sha256" => {
-                            if value.len() == 64 {
+                            if value.len() == 64 && value.is_ascii() {
                                 let mut hash = [0u8; 32];
                                 let mut valid = true;
                                 for i in 0..32 {
@@ -248,6 +259,11 @@ impl<'a> Config<'a> {
                     }
                 }
             }
+        }
+        
+        if in_entry_block {
+            current_entry.index = config.entries.len();
+            config.entries.push(current_entry);
         }
         
         config
