@@ -2,17 +2,18 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
-use log::{info, warn};
+use log::info;
 use uefi::prelude::*;
 use uefi::proto::media::file::{File, FileAttribute, FileMode, FileInfo};
-use uefi::proto::media::fs::SimpleFileSystem;
+
 
 pub fn read_file_bytes(image_handle: Handle, path: &str) -> Option<Vec<u8>> {
     let mut fs = uefi::boot::get_image_file_system(image_handle).ok()?;
     let mut root = fs.open_volume().ok()?;
     
     let path_str = path.replace('/', "\\");
-    let path_16 = uefi::CString16::try_from(path_str.as_str()).ok()?;
+    let path_str = path_str.trim_start_matches('\\');
+    let path_16 = uefi::CString16::try_from(path_str).ok()?;
     
     let file_handle = root.open(&path_16, FileMode::Read, FileAttribute::empty()).ok()?;
     let mut file = file_handle.into_regular_file()?;
