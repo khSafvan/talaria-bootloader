@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use uefi::prelude::*;
+
 use crate::gui::BootEntry;
-use alloc::vec::Vec;
+
 
 use core::fmt::Write;
 use uefi::proto::console::text::{Key, ScanCode};
@@ -12,9 +12,12 @@ pub fn show_text_menu(entries: &[BootEntry], timeout: isize, default_entry: usiz
         return None;
     }
 
-    let mut selected = 0;
+    let mut selected = default_entry;
+    if selected >= entries.len() {
+        selected = 0;
+    }
     let mut ticks: isize = 0;
-    let timeout_ticks = timeout * 10; // 100ms per tick for text menu
+    let mut timeout_ticks = timeout * 10; // 100ms per tick for text menu
     
     // Clear screen once
     uefi::system::with_stdout(|stdout| { let _ = stdout.clear(); });
@@ -40,7 +43,7 @@ pub fn show_text_menu(entries: &[BootEntry], timeout: isize, default_entry: usiz
         let key_opt = uefi::system::with_stdin(|stdin| stdin.read_key().unwrap_or(None));
         
         if let Some(key) = key_opt {
-            ticks = 0; // reset on input
+            timeout_ticks = -1; // abort timeout on input
             match key {
                 Key::Special(ScanCode::UP) => {
                     if selected > 0 { selected -= 1; }
@@ -59,19 +62,16 @@ pub fn show_text_menu(entries: &[BootEntry], timeout: isize, default_entry: usiz
                     }
                 }
                 Key::Special(ScanCode::ESCAPE) => {
-                    let safe_default = if default_entry < entries.len() { default_entry } else { 0 };
-                    return Some(safe_default);
+                    return None;
                 }
                 _ => {}
             }
         } else {
-            if timeout_ticks > 0 {
-                ticks += 1;
+            if timeout_ticks >= 0 {
                 if ticks >= timeout_ticks {
-                    if default_entry < entries.len() {
-                        return Some(default_entry);
-                    }
+                    return Some(selected);
                 }
+                ticks += 1;
             }
         }
         
