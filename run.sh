@@ -25,10 +25,12 @@ if [ -f "boot.conf" ]; then
 fi
 
 # Resolve the correct OS-agnostic OVMF path
-if [ -f "/usr/share/edk2/x64/OVMF.fd" ]; then
-    # Standard path for Arch Linux / CachyOS
+if [ -f "/usr/share/edk2/x64/OVMF.4m.fd" ]; then
+    OVMF="/usr/share/edk2/x64/OVMF.4m.fd"
+elif [ -f "/usr/share/edk2/x64/OVMF.fd" ]; then
     OVMF="/usr/share/edk2/x64/OVMF.fd"
 elif [ -f "/usr/share/ovmf/OVMF.fd" ]; then
+    OVMF="/usr/share/ovmf/OVMF.fd"
     # Standard path for Debian / Ubuntu
     OVMF="/usr/share/ovmf/OVMF.fd"
 else
@@ -44,5 +46,5 @@ qemu-system-x86_64 \
     -bios "$OVMF" \
     -drive format=raw,file=fat:rw:esp \
     -net none \
-    -serial stdio \
-    -m 256
+     \
+    -m 256 -nographic
