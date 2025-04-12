@@ -158,10 +158,90 @@ impl<'boot> GuiState<'boot> {
             }
         }
     }
+
+    pub fn draw_char(&mut self, x: usize, y: usize, ch: char, color: Color, scale: usize) {
+        use font8x8::UnicodeFonts;
+        if let Some(glyph) = font8x8::BASIC_FONTS.get(ch) {
+            for (r, row) in glyph.iter().enumerate() {
+                for c in 0..8 {
+                    if (*row & (1 << c)) != 0 {
+                        self.fill_rect(x + c * scale, y + r * scale, scale, scale, color);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn draw_text(&mut self, x: usize, y: usize, text: &str, color: Color, scale: usize) {
+        let mut cur_x = x;
+        for ch in text.chars() {
+            self.draw_char(cur_x, y, ch, color, scale);
+            cur_x += 8 * scale;
+        }
+    }
     
     pub fn draw(&mut self) {
         self.fill_rect(0, 0, self.screen_width, self.screen_height, self.bg_color);
-        // Note: Icon rendering and Text rasterization would be composited onto backbuffer here
+        
+        // Draw the main Title
+        let title_text = self.title.clone().unwrap_or(alloc::string::String::from("Talaria Bootloader"));
+        if self.show_title {
+            let scale = 3;
+            let text_w = title_text.len() * 8 * scale;
+            let x = (self.screen_width.saturating_sub(text_w)) / 2;
+            let y = self.screen_height / 10;
+            self.draw_text(x, y, &title_text, self.title_color, scale);
+        }
+
+        // Draw boot entries
+        let entry_height = 100;
+        let entry_width = 300;
+        let padding = 20;
+        
+        let num_entries = self.entries.len();
+        let total_w = num_entries * entry_width + (num_entries.saturating_sub(1)) * padding;
+        let mut start_x = (self.screen_width.saturating_sub(total_w)) / 2;
+        let start_y = (self.screen_height.saturating_sub(entry_height)) / 2;
+        
+        for i in 0..num_entries {
+            let is_selected = i == self.selected;
+            let has_color = self.entries[i].has_color;
+            let entry_color = self.entries[i].color;
+            let entry_name = self.entries[i].name.clone();
+            
+            // Draw box (highlight if selected)
+            let box_color = if is_selected { self.highlight_color } else { Color { r: 50, g: 50, b: 50 } };
+            self.fill_rect(start_x, start_y, entry_width, entry_height, box_color);
+            
+            // Draw internal colored block or OS hint
+            let inner_color = if has_color { entry_color } else { Color { r: 80, g: 80, b: 80 } };
+            self.fill_rect(start_x + 5, start_y + 5, entry_width - 10, entry_height - 50, inner_color);
+            
+            // Draw entry title text
+            if self.show_names {
+                let scale = 2;
+                let text_w = entry_name.len() * 8 * scale;
+                let text_x = start_x + (entry_width.saturating_sub(text_w)) / 2;
+                let text_y = start_y + entry_height - 35;
+                let text_color = if is_selected { Color { r: 255, g: 255, b: 255 } } else { self.name_color };
+                self.draw_text(text_x, text_y, &entry_name, text_color, scale);
+            }
+            
+            start_x += entry_width + padding;
+        }
+        
+        // Draw timeout countdown if active
+        if self.timeout > 0 {
+            let mut buf = alloc::string::String::new();
+            use core::fmt::Write;
+            let _ = write!(&mut buf, "Booting in {}s...", self.timeout);
+            
+            let scale = 2;
+            let text_w = buf.len() * 8 * scale;
+            let text_x = (self.screen_width.saturating_sub(text_w)) / 2;
+            let text_y = self.screen_height - (self.screen_height / 10);
+            self.draw_text(text_x, text_y, &buf, COLOR_WHITE, scale);
+        }
     }
     
     pub fn flush(&mut self) {
