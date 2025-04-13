@@ -79,7 +79,7 @@ fn main() -> Status {
         let mut gop_proto = gop.unwrap();
         let mut gui = gui::GuiState {
             gop: Some(&mut *gop_proto),
-            pointer: pointer,
+            pointer,
             entries: config.entries.clone(),
             timeout: config.timeout,
             default_entry: config.default_entry,
@@ -108,12 +108,11 @@ fn main() -> Status {
             let name = uefi::CString16::try_from("OsIndications").unwrap();
             let mut value: u64 = 1;
             let mut data = [0u8; 8];
-            if let Ok((var_data, _)) = uefi::runtime::get_variable(&name, &uefi::runtime::VariableVendor::GLOBAL_VARIABLE, &mut data) {
-                if var_data.len() == 8 {
+            if let Ok((var_data, _)) = uefi::runtime::get_variable(&name, &uefi::runtime::VariableVendor::GLOBAL_VARIABLE, &mut data) 
+                && var_data.len() == 8 {
                     let mut arr = [0u8; 8];
                     arr.copy_from_slice(var_data);
                     value = u64::from_le_bytes(arr) | 1;
-                }
             }
             let _ = uefi::runtime::set_variable(&name, &uefi::runtime::VariableVendor::GLOBAL_VARIABLE, flags, &value.to_le_bytes());
             uefi::runtime::reset(uefi::runtime::ResetType::COLD, Status::SUCCESS, None);
