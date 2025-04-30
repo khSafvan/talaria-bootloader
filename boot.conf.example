@@ -7,11 +7,6 @@
 #      e.g.  \EFI\talaria\icons\arch.png
 #    - Colors are hex in the form  #RRGGBB  (e.g. #7AA2F7).
 #    - Lines starting with '#' are comments. Whitespace around '=' is ignored.
-#    - Kernels/initrds on a non-FAT /boot (btrfs, ext4, ...) are unreadable by
-#      UEFI unless you drop an efifs driver into \EFI\talaria\drivers\ - then the
-#      path is relative to that filesystem's root, e.g. \boot\vmlinuz-...
-#      (see "Booting from non-FAT filesystems" in the README). A UKI on the ESP
-#      under \EFI\Linux\*.efi always works without a driver.
 # ============================================================================
 
 # --- Global settings --------------------------------------------------------
@@ -29,200 +24,44 @@ default=0
 # the OS instead of "Booting <name>..."). 0 = show progress text.
 quiet=0
 
-# 1 = use the plain text-console menu instead of the graphical one, even when a
-# graphics adapter is available. Talaria ALSO falls back to this text menu
-# automatically if no Graphics Output Protocol is found, so set this only if you
-# prefer the text UI. 0 = graphical menu (default). (alias: text_mode)
-#text_menu=0
-
-# Resolution the graphical menu renders at:
-#   WxH      e.g. 1920x1080 - switch to that exact GOP mode if available
-#   max      use the highest resolution the firmware offers
-#   native   (or absent) keep the firmware's current/native mode (default)
-# If the requested WxH is not in the firmware's mode list, the current mode is
-# kept. Has no effect in text mode.
-#resolution=native
-
-# Global default kernel command line. Applied to any entry that does not set its
-# own cmdline/options - including auto-detected raw kernels (which otherwise have
-# no root=). Per-entry cmdline always wins. (alias: options)
-#cmdline=root=PARTUUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx rw quiet
-
-# Graphical menu - show the name label under each icon. 0 = icons only.
-#show_names=1
-
-# Graphical menu - show details for the selected entry near the bottom of the
-# screen. When show_names=1 this is path-only; when show_names=0 it shows the
-# name above the path. (alias: centre_info)
-#center_info=0
-
-# Corner radius (in pixels) of the selection highlight / frost box. 0 = built-in
-# default. Larger = rounder; small values = squarer corners. (alias: corner_radius)
-#box_radius=14
-
-# Remember the last-booted entry and preselect it next time (persisted in an NVRAM
-# variable). When on, this OVERRIDES default=. 0 = always honour default=. (alias: remember)
-#remember_last=0
-
-# Auto-generate a "<name> (recovery)" entry for each Linux entry, appending
-# "systemd.unit=rescue.target nomodeset" to its cmdline. 0 = off. (alias: recovery)
-#recovery_entries=0
-
-# Mouse / touchpad / touchscreen support in the graphical menu. A cursor appears
-# when a pointer device is present; a single click on an icon boots it, and clicks
-# on the power icons trigger them. 1 = on (default), 0 = off. (alias: pointer)
-#mouse=1
-
-# Allow editing an entry's kernel command line at the menu: select an entry and
-# press 'e', edit, Enter boots with the change (one-shot, not saved). Set 0 to
-# disable (e.g. on locked-down machines). 1 = on (default).
-#editor=1
-
-# Menu title shown at the top.
-#   (absent / empty) -> the default title "Talaria"
-#   none             -> no title at all
-#   anything else    -> shown verbatim
-#title=My Rig
-
-# Text font. Currently only "jetbrains" is bundled. Empty = default.
-#font=jetbrains
-
-# Theme. If set, Talaria loads \EFI\talaria\themes\<name>.conf and the UI values in
-# that file OVERRIDE the ones below. A theme file may contain any of the UI keys
-# in this file (colors, sizes, icons, underline, power, background, title...).
-# Boot entries always stay here in boot.conf - themes are UI-only.
-#   <name>   load \EFI\talaria\themes\<name>.conf
-#   random   pick a random theme from \EFI\talaria\themes\ on each boot
-#   cycle    advance to the next theme each boot (position saved in NVRAM)
-#theme=nord
-
 # --- Colors -----------------------------------------------------------------
 # Title text color.
 #title_color=#7AA2F7
 # Default color for every entry's name (per-entry "color=" overrides this).
 #name_color=#C0CAF5
-# Accent color of the selection highlight / underline.
+# Accent color of the selection highlight.
 #highlight_color=#7AA2F7
-
-# --- Blur highlight ---------------------------------------------------------
-# Replace the flat selection card with a blurred-glass panel that follows the
-# selection (entries AND power actions), with softly feathered edges.
-#   blur        = 0       off (flat card)
-#               = 1       frosted glass (blur + light tint)
-#               = clear   clear glass (blur only, no tint)
-#   blur_title  = 1       blurred panel behind the title (static)
-#   blur_color  = #RRGGBB tint colour for frosted mode (default white)
-# The panel blurs the background image, so it looks best over a detailed
-# background. With no background it falls back to a translucent tint.
-#blur=clear
-#blur_title=1
-#blur_color=#FFFFFF
-
-# --- Animation --------------------------------------------------------------
-# Selection animation speed, 1 (slow) .. 10 (fast). Default 8. Switching
-# between an entry and a power action cross-fades; moving within a row/column
-# slides. Same speed for both.
-#anim_speed=8
-
-# Entries shown per page. When more entries exist than fit a page, a chevron
-# (< / >) appears and Left/Right paging cross-fades between pages at anim_speed.
-# Default 3.
-#entries_per_page=3
-
-# --- Font sizes (in pixels; 0 / absent = sensible default) ------------------
-# Title height. Default scales with the screen (~ screen_height / 12).
-#title_size=120
-# Entry-name height. Default is 16.
-#name_size=28
-
-# --- Icons (all in pixels; 0 / absent = sensible default) -------------------
-# Icon edge length (icons are square). Default 64. This is the GLOBAL default;
-# an individual entry can override it with its own "icon_size =" (see below).
-#icon_size=128
-# Horizontal gap between icons. Default 60.
-#icon_spacing=80
-# Vertical center of the icon row. Default = middle of the screen.
-# Icons of different sizes are centered on this line; their labels share one
-# baseline below the tallest icon.
-#icon_y=560
-
-# --- Selection underline (the accent bar under the selected entry) ----------
-# Color. Defaults to highlight_color if not set.
-#underline_color=#7AA2F7
-# Thickness (height) in pixels. Default 4.
-#underline_thickness=6
-# Length (width) in pixels. Default = icon width + a small margin.
-#underline_length=180
-
-# --- Power actions (Shutdown / Reboot / Firmware) ---------------------------
-# Which corner the three actions are stacked in:
-#   bottomright (default) | bottomleft | topright | topleft
-#power_position=bottomright
-# Color of each action's accent (its first letter / hotkey). Each defaults to
-# highlight_color if not set.
-#shutdown_color=#F7768E
-#reboot_color=#E0AF68
-#firmware_color=#9ECE6A
-#
-# Show the three actions as icons instead of text. They are still
-# triggered by the S / R / F keys. Set power_icons=1 and give a PNG for each.
-# Any action without a loaded icon falls back to its text label, so a partial
-# set is fine. power_icon_size is the icon edge length in px (default 40).
-#power_icons=1
-#power_icon_size=44
-#shutdown_icon=\EFI\talaria\icons\power_shutdown.png
-#reboot_icon=\EFI\talaria\icons\power_reboot.png
-#firmware_icon=\EFI\talaria\icons\power_firmware.png
-
-# --- Background -------------------------------------------------------------
-# Full-screen background image (PNG, RGB or RGBA). Omit for a solid backdrop.
-background=\EFI\talaria\backgrounds\default.png
+# Background color.
+#bg_color=#1a1b26
 
 # ============================================================================
 #  Menu keys
 #    Left/Right                move between boot entries
-#    Down                      enter the power column (Shutdown), then move down
-#    Up                        move up the power column; from the top, back to entries
-#    Enter                     boot the focused entry / run the focused power action
-#    1-9                       boot entry N directly
-#    S / R / F                 Shutdown / Reboot / Firmware setup (from anywhere)
+#    Enter                     boot the focused entry 
 #    Esc                       boot the default entry
 # ============================================================================
 
+# --- Background -------------------------------------------------------------
+# Full-screen background image (BMP). Omit for a solid backdrop.
+#background=\EFI\talaria\backgrounds\default.bmp
+
 # ----------------------------------------------------------------------------
 #  Boot entry format
-#    entry {                                    (one block type for everything)
+#    entry {                                    
 #        name      = "Display Name"
 #        icon      = \path\to\icon.png
-#        icon_size = 128                       (optional - overrides global icon_size)
 #        kernel    = \path\to\kernel-or-efi
-#        initrd    = \path\to\initrd          (optional - Linux stub kernels)
-#        cmdline   = "kernel command line"     (optional)
-#        options   = "kernel command line"     (alias for cmdline; systemd-boot style)
-#        color     = #RRGGBB                   (optional per-entry name color)
-#        uuid      = partition-uuid            (optional - pin which partition the
-#                                               kernel/bootmgr lives on, by PARTUUID)
-#        sha256    = <64 hex chars>            (optional - pin the image hash)
+#        initrd    = \path\to\initrd          (optional)
+#        cmdline   = "kernel command line"    (optional)
+#        color     = #RRGGBB                  (optional per-entry name color)
+#        sha256    = <64 hex chars>           (optional - pin the image hash)
 #    }
-#
-#  There is no longer a separate "linux"/"windows" block or a "type=" key:
-#  Talaria auto-detects how to boot each entry from the image itself -
-#      * a PE image with no initrd/cmdline   -> chainloaded (e.g. Windows
-#        bootmgfw.efi); loaded by device path so its BCD is found
-#      * a PE image (UKI, or EFI-stub vmlinuz) -> LoadImage/StartImage, with
-#        cmdline and initrd applied if given (initrd via the standard
-#        LINUX_EFI_INITRD_MEDIA_GUID protocol, the same mechanism systemd-boot
-#        uses - so a plain vmlinuz + separate initramfs boots without a UKI)
-#      * a raw (non-PE) kernel               -> Linux EFI handover boot-params
-#  The block names "linux" and "windows" are still accepted as aliases for
-#  "entry" (old configs keep working), but they no longer affect booting.
 #
 #  Auto-detection (used only when boot.conf is absent, or has no entries):
 #    Talaria scans the ESP for kernels instead of guessing fixed paths -
 #      * \EFI\Linux\*.efi          Unified Kernel Images (each becomes an entry)
 #      * \boot\vmlinuz*, \vmlinuz* raw kernels (fallback if no UKIs found)
 #      * \EFI\Microsoft\Boot\bootmgfw.efi   Windows Boot Manager
-
 # ----------------------------------------------------------------------------
 
 # Linux example - EFI stub kernel or Unified Kernel Image (UKI).
@@ -230,18 +69,18 @@ background=\EFI\talaria\backgrounds\default.png
 # For a plain stub kernel, supply initrd and cmdline as shown.
 #entry {
 #    name    = "Arch Linux"
-#    icon    = \EFI\talaria\icons\arch.png
+#    icon    = \EFI\talaria\icons\arch.bmp
 #    color   = #1793D1
 #    kernel  = \vmlinuz-linux
 #    initrd  = \initramfs-linux.img
 #    cmdline = "root=PARTUUID=CHANGE-ME-TO-YOUR-ROOT-PARTUUID......"
-}
+#}
 
 # Windows example - chainloads the Windows Boot Manager. "kernel" is the path
 # to bootmgfw.efi; Talaria detects the PE image and loads it via its device path
-# so the BCD is found. No type= needed.
+# so the BCD is found.
 #entry {
 #    name   = "Windows 11"
-#    icon   = \EFI\talaria\icons\windows.png
-#   kernel = \EFI\Microsoft\Boot\bootmgfw.efi
-}
+#    icon   = \EFI\talaria\icons\windows.bmp
+#    kernel = \EFI\Microsoft\Boot\bootmgfw.efi
+#}
