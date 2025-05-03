@@ -14,14 +14,24 @@ fi
 # Set up the mock EFI System Partition (ESP)
 echo "Setting up ESP environment..."
 mkdir -p esp/EFI/BOOT
-mkdir -p esp/talaria
+mkdir -p esp/EFI/talaria
+mkdir -p esp/EFI/talaria/icons
+mkdir -p esp/EFI/talaria/backgrounds
 
 # Copy our newly compiled bootloader into the standard fallback location
 cp "$EFI_BINARY" esp/EFI/BOOT/BOOTX64.EFI
 
 # Safely copy configuration or assets (if they exist) into the ESP
 if [ -f "boot.conf" ]; then
-    cp boot.conf esp/talaria/
+    cp boot.conf esp/EFI/talaria/
+fi
+
+if [ -d "assets/icons" ]; then
+    cp assets/icons/*.bmp esp/EFI/talaria/icons/ 2>/dev/null || true
+fi
+
+if [ -d "assets/backgrounds" ]; then
+    cp assets/backgrounds/*.bmp esp/EFI/talaria/backgrounds/ 2>/dev/null || true
 fi
 
 # Resolve the correct OS-agnostic OVMF path
