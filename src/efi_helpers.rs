@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use log::info;
 use uefi::prelude::*;
@@ -51,4 +51,29 @@ pub fn read_file_to_string(image_handle: Handle, path: &str) -> Option<String> {
 
 pub fn log_msg(msg: &str) {
     info!("{}", msg);
+}
+pub fn scan_directory(image_handle: Handle, path: &str) -> Option<Vec<String>> {
+    let mut fs = uefi::boot::get_image_file_system(image_handle).ok()?;
+    let mut root = fs.open_volume().ok()?;
+    
+    let path_str = path.replace('/', "\\");
+    let path_str = path_str.trim_start_matches('\\');
+    let path_16 = uefi::CString16::try_from(path_str).ok()?;
+    
+    let file_handle = root.open(&path_16, FileMode::Read, FileAttribute::empty()).ok()?;
+    let mut dir = file_handle.into_directory()?;
+    
+    let mut results = alloc::vec::Vec::new();
+    let mut buf = alloc::vec![0u8; 4096];
+    
+    while let Ok(Some(info)) = dir.read_entry(&mut buf) {
+        if info.attribute().contains(FileAttribute::DIRECTORY) { continue; }
+        let filename_cstr16 = info.file_name();
+        let s = filename_cstr16.to_string();
+        if !s.is_empty() && s != "." && s != ".." {
+            results.push(s);
+        }
+    }
+    
+    Some(results)
 }

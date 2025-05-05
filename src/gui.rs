@@ -20,12 +20,52 @@ pub const COLOR_GREEN: Color = Color { r: 0x4A, g: 0xD9, b: 0x6E };
 pub const COLOR_ORANGE: Color = Color { r: 0xD9, g: 0x8A, b: 0x4A };
 pub const COLOR_DARK_BG: Color = Color { r: 0x1A, g: 0x1A, b: 0x2E };
 
-pub struct Icon {
+#[derive(Clone)]
+pub struct BmpImage {
     pub width: usize,
     pub height: usize,
-    pub pixels: Vec<u32>,
-    pub scaled_size: usize,
-    pub scaled: Option<Vec<u32>>,
+    pub pixels: Vec<u32>, // AARRGGBB
+}
+
+pub fn parse_bmp(data: &[u8]) -> Option<BmpImage> {
+    if data.len() < 54 { return None; }
+    if &data[0..2] != b"BM" { return None; }
+
+    let pixel_offset = u32::from_le_bytes(data[10..14].try_into().unwrap_or([0;4])) as usize;
+    let bpp = u16::from_le_bytes(data[28..30].try_into().unwrap_or([0;2]));
+    
+    if bpp != 24 && bpp != 32 { return None; }
+
+    let width = i32::from_le_bytes(data[18..22].try_into().unwrap_or([0;4])) as usize;
+    let height_raw = i32::from_le_bytes(data[22..26].try_into().unwrap_or([0;4]));
+    let top_down = height_raw < 0;
+    let height = height_raw.abs() as usize;
+
+    if data.len() < pixel_offset { return None; }
+    
+    let mut pixels = alloc::vec![0; width * height];
+    let row_stride = (width * (bpp as usize / 8) + 3) & !3;
+    
+    for y in 0..height {
+        let src_y = if top_down { y } else { height - 1 - y };
+        let row_start = pixel_offset + src_y * row_stride;
+        
+        if row_start + width * (bpp as usize / 8) > data.len() {
+            return None;
+        }
+        
+        for x in 0..width {
+            let p = row_start + x * (bpp as usize / 8);
+            let b = data[p];
+            let g = data[p+1];
+            let r = data[p+2];
+            let a = if bpp == 32 { data[p+3] } else { 255 };
+            
+            pixels[y * width + x] = ((a as u32) << 24) | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32);
+        }
+    }
+    
+    Some(BmpImage { width, height, pixels })
 }
 
 pub const TALARIA_ACTION_BOOT: i32 = 0;
@@ -42,6 +82,7 @@ pub const POWER_POS_TOPLEFT: i32 = 3;
 pub struct BootEntry {
     pub name: String,
     pub icon_path: Option<String>,
+    pub icon_data: Option<BmpImage>,
     pub kernel_path: Option<String>,
     pub initrd_path: Option<String>,
     pub cmdline: Option<String>,
@@ -88,6 +129,8 @@ pub struct GuiState<'boot> {
     pub bg_color: Color,
     pub highlight_color: Color,
     
+    pub bg_image: Option<BmpImage>,
+    
     pub scene_cache: Option<Vec<BltPixel>>,
     pub scene_valid: bool,
     pub dirty: bool,
@@ -126,6 +169,7 @@ impl<'boot> GuiState<'boot> {
             name_color: COLOR_WHITE,
             bg_color: COLOR_DARK_BG,
             highlight_color: COLOR_BLUE,
+            bg_image: None,
             scene_cache: None,
             scene_valid: false,
             dirty: true,
@@ -165,6 +209,46 @@ impl<'boot> GuiState<'boot> {
         }
     }
 
+    pub fn draw_image(&mut self, x: usize, y: usize, img: &BmpImage) {
+        if x >= self.screen_width || y >= self.screen_height {
+            return;
+        }
+        
+        let ex = x.saturating_add(img.width).min(self.screen_width);
+        let ey = y.saturating_add(img.height).min(self.screen_height);
+        
+        if let Some(buf) = &mut self.backbuffer {
+            for j in y..ey {
+                let img_y = j - y;
+                for i in x..ex {
+                    let img_x = i - x;
+                    let p = img.pixels[img_y * img.width + img_x];
+                    let a = (p >> 24) as u32;
+                    
+                    if a == 255 {
+                        let r = ((p >> 16) & 0xFF) as u8;
+                        let g = ((p >> 8) & 0xFF) as u8;
+                        let b = (p & 0xFF) as u8;
+                        buf[j * self.screen_width + i] = BltPixel::new(r, g, b);
+                    } else if a > 0 {
+                        let r = ((p >> 16) & 0xFF) as u32;
+                        let g = ((p >> 8) & 0xFF) as u32;
+                        let b = (p & 0xFF) as u32;
+                        let inv_a = 255 - a;
+                        
+                        let idx = j * self.screen_width + i;
+                        let bg = buf[idx];
+                        
+                        let new_r = ((r * a + (bg.red as u32) * inv_a) / 255) as u8;
+                        let new_g = ((g * a + (bg.green as u32) * inv_a) / 255) as u8;
+                        let new_b = ((b * a + (bg.blue as u32) * inv_a) / 255) as u8;
+                        buf[idx] = BltPixel::new(new_r, new_g, new_b);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn draw_char(&mut self, x: usize, y: usize, ch: char, color: Color, scale: usize) {
         use font8x8::UnicodeFonts;
         if let Some(glyph) = font8x8::BASIC_FONTS.get(ch) {
@@ -187,7 +271,14 @@ impl<'boot> GuiState<'boot> {
     }
     
     pub fn draw(&mut self) {
-        self.fill_rect(0, 0, self.screen_width, self.screen_height, self.bg_color);
+        if let Some(bg) = self.bg_image.clone() {
+            // Draw background scaled/centered or tiled? Just draw at 0,0 for now.
+            // If we have a background color we should fill first just in case image is smaller.
+            self.fill_rect(0, 0, self.screen_width, self.screen_height, self.bg_color);
+            self.draw_image(0, 0, &bg);
+        } else {
+            self.fill_rect(0, 0, self.screen_width, self.screen_height, self.bg_color);
+        }
         
         // Draw the main Title
         let title_text = self.title.clone().unwrap_or(alloc::string::String::from("Talaria Bootloader"));
@@ -219,9 +310,16 @@ impl<'boot> GuiState<'boot> {
             let box_color = if is_selected { self.highlight_color } else { Color { r: 50, g: 50, b: 50 } };
             self.fill_rect(start_x, start_y, entry_width, entry_height, box_color);
             
-            // Draw internal colored block or OS hint
-            let inner_color = if has_color { entry_color } else { Color { r: 80, g: 80, b: 80 } };
-            self.fill_rect(start_x + 5, start_y + 5, entry_width - 10, entry_height - 50, inner_color);
+            // Draw internal colored block or OS hint or Icon
+            let icon_opt = self.entries[i].icon_data.clone();
+            if let Some(icon) = &icon_opt {
+                let ix = start_x + (entry_width.saturating_sub(icon.width)) / 2;
+                let iy = start_y + (entry_height.saturating_sub(icon.height)) / 2 - 10;
+                self.draw_image(ix, iy, icon);
+            } else {
+                let inner_color = if has_color { entry_color } else { Color { r: 80, g: 80, b: 80 } };
+                self.fill_rect(start_x + 5, start_y + 5, entry_width - 10, entry_height - 50, inner_color);
+            }
             
             // Draw entry title text
             if self.show_names {
@@ -248,6 +346,44 @@ impl<'boot> GuiState<'boot> {
             let text_y = self.screen_height - (self.screen_height / 10);
             self.draw_text(text_x, text_y, &buf, COLOR_WHITE, scale);
         }
+        
+        self.draw_power_buttons();
+        self.draw_cursor();
+    }
+    
+    pub fn draw_power_buttons(&mut self) {
+        // We will just draw small colored blocks with letters S, R, F in the bottom right corner
+        let padding = 10;
+        let box_size = 40;
+        let mut x = self.screen_width.saturating_sub(padding + box_size);
+        let y = self.screen_height.saturating_sub(padding + box_size);
+        
+        // F = Firmware (Green)
+        self.fill_rect(x, y, box_size, box_size, COLOR_GREEN);
+        self.draw_text(x + 12, y + 12, "F", COLOR_BLACK, 2);
+        
+        x = x.saturating_sub(padding + box_size);
+        // R = Reboot (Orange)
+        self.fill_rect(x, y, box_size, box_size, COLOR_ORANGE);
+        self.draw_text(x + 12, y + 12, "R", COLOR_BLACK, 2);
+        
+        x = x.saturating_sub(padding + box_size);
+        // S = Shutdown (Red)
+        self.fill_rect(x, y, box_size, box_size, COLOR_RED);
+        self.draw_text(x + 12, y + 12, "S", COLOR_BLACK, 2);
+    }
+    
+    pub fn draw_cursor(&mut self) {
+        if self.cursor_x == -1 || self.cursor_y == -1 { return; }
+        let cx = self.cursor_x as usize;
+        let cy = self.cursor_y as usize;
+        
+        let cursor_color = Color { r: 200, g: 200, b: 200 };
+        let outline = Color { r: 0, g: 0, b: 0 };
+        
+        // simple 3x3 pixel square cursor
+        self.fill_rect(cx.saturating_sub(2), cy.saturating_sub(2), 5, 5, outline);
+        self.fill_rect(cx.saturating_sub(1), cy.saturating_sub(1), 3, 3, cursor_color);
     }
     
     pub fn flush(&mut self) {
@@ -389,9 +525,50 @@ impl<'boot> GuiState<'boot> {
                         self.dirty = true;
                     }
                     
-                    if state.button[0] && !self.entries.is_empty() {
-                        self.running = false;
-                        return Some(self.entries[self.selected].clone());
+                    if state.button[0] {
+                        let cx = self.cursor_x as usize;
+                        let cy = self.cursor_y as usize;
+                        
+                        // Check power buttons
+                        let padding = 10;
+                        let box_size = 40;
+                        let f_x = self.screen_width.saturating_sub(padding + box_size);
+                        let r_x = f_x.saturating_sub(padding + box_size);
+                        let s_x = r_x.saturating_sub(padding + box_size);
+                        let p_y = self.screen_height.saturating_sub(padding + box_size);
+                        
+                        if cy >= p_y && cy <= p_y + box_size {
+                            if cx >= f_x && cx <= f_x + box_size {
+                                self.action = TALARIA_ACTION_FIRMWARE;
+                                self.running = false;
+                                return None;
+                            } else if cx >= r_x && cx <= r_x + box_size {
+                                self.action = TALARIA_ACTION_REBOOT;
+                                self.running = false;
+                                return None;
+                            } else if cx >= s_x && cx <= s_x + box_size {
+                                self.action = TALARIA_ACTION_SHUTDOWN;
+                                self.running = false;
+                                return None;
+                            }
+                        }
+                        
+                        // Check boot entries
+                        let entry_height = 100;
+                        let entry_width = 300;
+                        let num_entries = self.entries.len();
+                        let total_w = num_entries * entry_width + (num_entries.saturating_sub(1)) * 20;
+                        let mut start_x = (self.screen_width.saturating_sub(total_w)) / 2;
+                        let start_y = (self.screen_height.saturating_sub(entry_height)) / 2;
+                        
+                        for i in 0..num_entries {
+                            if cx >= start_x && cx <= start_x + entry_width && cy >= start_y && cy <= start_y + entry_height {
+                                self.selected = i;
+                                self.running = false;
+                                return Some(self.entries[self.selected].clone());
+                            }
+                            start_x += entry_width + 20;
+                        }
                     }
                 }
 
