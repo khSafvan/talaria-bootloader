@@ -27,6 +27,18 @@ pub fn read_file_bytes(image_handle: Handle, path: &str) -> Option<Vec<u8>> {
     Some(buf)
 }
 
+pub fn file_exists(image_handle: Handle, path: &str) -> bool {
+    if let Ok(mut fs) = uefi::boot::get_image_file_system(image_handle)
+        && let Ok(mut root) = fs.open_volume() {
+            let path_str = path.replace('/', "\\");
+            let path_str = path_str.trim_start_matches('\\');
+            if let Ok(path_16) = uefi::CString16::try_from(path_str) {
+                return root.open(&path_16, FileMode::Read, FileAttribute::empty()).is_ok();
+            }
+    }
+    false
+}
+
 pub fn read_file_to_string(image_handle: Handle, path: &str) -> Option<String> {
     let bytes = read_file_bytes(image_handle, path)?;
     

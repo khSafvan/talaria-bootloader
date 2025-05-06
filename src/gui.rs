@@ -36,10 +36,11 @@ pub fn parse_bmp(data: &[u8]) -> Option<BmpImage> {
     
     if bpp != 24 && bpp != 32 { return None; }
 
-    let width = i32::from_le_bytes(data[18..22].try_into().unwrap_or([0;4])) as usize;
+    let width_raw = i32::from_le_bytes(data[18..22].try_into().unwrap_or([0;4]));
+    let width = width_raw.unsigned_abs() as usize;
     let height_raw = i32::from_le_bytes(data[22..26].try_into().unwrap_or([0;4]));
     let top_down = height_raw < 0;
-    let height = height_raw.abs() as usize;
+    let height = height_raw.unsigned_abs() as usize;
 
     if data.len() < pixel_offset { return None; }
     
@@ -61,7 +62,7 @@ pub fn parse_bmp(data: &[u8]) -> Option<BmpImage> {
             let r = data[p+2];
             let a = if bpp == 32 { data[p+3] } else { 255 };
             
-            pixels[y * width + x] = ((a as u32) << 24) | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32);
+            pixels[src_y * width + x] = ((a as u32) << 24) | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32);
         }
     }
     
@@ -95,9 +96,6 @@ pub struct BootEntry {
     pub sha256: [u8; 32],
     pub has_sha256: bool,
 }
-
-// Note: In a complete Rust port, the GuiState struct would hold UEFI protocol handles
-// and vectors for entries and caches. We will define it as we port the GUI rendering.
 
 pub struct GuiState<'boot> {
     pub gop: Option<&'boot mut uefi::proto::console::gop::GraphicsOutput>,
@@ -160,7 +158,7 @@ impl<'boot> GuiState<'boot> {
             focus: 0,
             timeout: 5,
             default_entry: 0,
-            cursor_x: -1, // -1 implies hidden until moved
+            cursor_x: -1,
             cursor_y: -1,
             title: None,
             show_title: true,
@@ -210,40 +208,47 @@ impl<'boot> GuiState<'boot> {
     }
 
     pub fn draw_image(&mut self, x: usize, y: usize, img: &BmpImage) {
-        if x >= self.screen_width || y >= self.screen_height {
-            return;
-        }
-        
-        let ex = x.saturating_add(img.width).min(self.screen_width);
-        let ey = y.saturating_add(img.height).min(self.screen_height);
-        
         if let Some(buf) = &mut self.backbuffer {
-            for j in y..ey {
-                let img_y = j - y;
-                for i in x..ex {
-                    let img_x = i - x;
-                    let p = img.pixels[img_y * img.width + img_x];
-                    let a = (p >> 24) as u32;
+            Self::draw_image_buf(buf, self.screen_width, self.screen_height, x, y, img);
+        }
+    }
+
+    pub fn draw_image_buf(
+        buf: &mut [BltPixel], 
+        screen_width: usize, 
+        screen_height: usize, 
+        x: usize, 
+        y: usize, 
+        img: &BmpImage
+    ) {
+        let ex = x.saturating_add(img.width).min(screen_width);
+        let ey = y.saturating_add(img.height).min(screen_height);
+        
+        for py in y..ey {
+            for px in x..ex {
+                let img_x = px - x;
+                let img_y = py - y;
+                let pixel = img.pixels[img_y * img.width + img_x];
+                let a = (pixel >> 24) as u32;
+                
+                if a == 0 { continue; }
+                
+                let r = ((pixel >> 16) & 0xFF) as u8;
+                let g = ((pixel >> 8) & 0xFF) as u8;
+                let b = (pixel & 0xFF) as u8;
+                let buf_idx = py * screen_width + px;
+                
+                if a == 255 {
+                    buf[buf_idx] = BltPixel::new(r, g, b);
+                } else {
+                    let bg = buf[buf_idx];
+                    let inv_a = 255 - a;
                     
-                    if a == 255 {
-                        let r = ((p >> 16) & 0xFF) as u8;
-                        let g = ((p >> 8) & 0xFF) as u8;
-                        let b = (p & 0xFF) as u8;
-                        buf[j * self.screen_width + i] = BltPixel::new(r, g, b);
-                    } else if a > 0 {
-                        let r = ((p >> 16) & 0xFF) as u32;
-                        let g = ((p >> 8) & 0xFF) as u32;
-                        let b = (p & 0xFF) as u32;
-                        let inv_a = 255 - a;
-                        
-                        let idx = j * self.screen_width + i;
-                        let bg = buf[idx];
-                        
-                        let new_r = ((r * a + (bg.red as u32) * inv_a) / 255) as u8;
-                        let new_g = ((g * a + (bg.green as u32) * inv_a) / 255) as u8;
-                        let new_b = ((b * a + (bg.blue as u32) * inv_a) / 255) as u8;
-                        buf[idx] = BltPixel::new(new_r, new_g, new_b);
-                    }
+                    let out_r = ((r as u32 * a + bg.red as u32 * inv_a) / 255) as u8;
+                    let out_g = ((g as u32 * a + bg.green as u32 * inv_a) / 255) as u8;
+                    let out_b = ((b as u32 * a + bg.blue as u32 * inv_a) / 255) as u8;
+                    
+                    buf[buf_idx] = BltPixel::new(out_r, out_g, out_b);
                 }
             }
         }
@@ -271,16 +276,11 @@ impl<'boot> GuiState<'boot> {
     }
     
     pub fn draw(&mut self) {
-        if let Some(bg) = self.bg_image.clone() {
-            // Draw background scaled/centered or tiled? Just draw at 0,0 for now.
-            // If we have a background color we should fill first just in case image is smaller.
-            self.fill_rect(0, 0, self.screen_width, self.screen_height, self.bg_color);
-            self.draw_image(0, 0, &bg);
-        } else {
-            self.fill_rect(0, 0, self.screen_width, self.screen_height, self.bg_color);
+        self.fill_rect(0, 0, self.screen_width, self.screen_height, self.bg_color);
+        if let (Some(bg), Some(buf)) = (&self.bg_image, &mut self.backbuffer) {
+            Self::draw_image_buf(buf, self.screen_width, self.screen_height, 0, 0, bg);
         }
         
-        // Draw the main Title
         let title_text = self.title.clone().unwrap_or(alloc::string::String::from("Talaria Bootloader"));
         if self.show_title {
             let scale = 3;
@@ -290,7 +290,6 @@ impl<'boot> GuiState<'boot> {
             self.draw_text(x, y, &title_text, self.title_color, scale);
         }
 
-        // Draw boot entries
         let entry_height = 100;
         let entry_width = 300;
         let padding = 20;
@@ -306,22 +305,20 @@ impl<'boot> GuiState<'boot> {
             let entry_color = self.entries[i].color;
             let entry_name = self.entries[i].name.clone();
             
-            // Draw box (highlight if selected)
             let box_color = if is_selected { self.highlight_color } else { Color { r: 50, g: 50, b: 50 } };
             self.fill_rect(start_x, start_y, entry_width, entry_height, box_color);
             
-            // Draw internal colored block or OS hint or Icon
-            let icon_opt = self.entries[i].icon_data.clone();
-            if let Some(icon) = &icon_opt {
+            if let Some(icon) = &self.entries[i].icon_data {
                 let ix = start_x + (entry_width.saturating_sub(icon.width)) / 2;
                 let iy = start_y + (entry_height.saturating_sub(icon.height)) / 2 - 10;
-                self.draw_image(ix, iy, icon);
+                if let Some(buf) = &mut self.backbuffer {
+                    Self::draw_image_buf(buf, self.screen_width, self.screen_height, ix, iy, icon);
+                }
             } else {
                 let inner_color = if has_color { entry_color } else { Color { r: 80, g: 80, b: 80 } };
                 self.fill_rect(start_x + 5, start_y + 5, entry_width - 10, entry_height - 50, inner_color);
             }
             
-            // Draw entry title text
             if self.show_names {
                 let scale = 2;
                 let text_w = entry_name.len() * 8 * scale;
@@ -334,7 +331,6 @@ impl<'boot> GuiState<'boot> {
             start_x += entry_width + padding;
         }
         
-        // Draw timeout countdown if active
         if self.timeout > 0 {
             let mut buf = alloc::string::String::new();
             use core::fmt::Write;
@@ -352,23 +348,19 @@ impl<'boot> GuiState<'boot> {
     }
     
     pub fn draw_power_buttons(&mut self) {
-        // We will just draw small colored blocks with letters S, R, F in the bottom right corner
         let padding = 10;
         let box_size = 40;
         let mut x = self.screen_width.saturating_sub(padding + box_size);
         let y = self.screen_height.saturating_sub(padding + box_size);
         
-        // F = Firmware (Green)
         self.fill_rect(x, y, box_size, box_size, COLOR_GREEN);
         self.draw_text(x + 12, y + 12, "F", COLOR_BLACK, 2);
         
         x = x.saturating_sub(padding + box_size);
-        // R = Reboot (Orange)
         self.fill_rect(x, y, box_size, box_size, COLOR_ORANGE);
         self.draw_text(x + 12, y + 12, "R", COLOR_BLACK, 2);
         
         x = x.saturating_sub(padding + box_size);
-        // S = Shutdown (Red)
         self.fill_rect(x, y, box_size, box_size, COLOR_RED);
         self.draw_text(x + 12, y + 12, "S", COLOR_BLACK, 2);
     }
@@ -381,7 +373,6 @@ impl<'boot> GuiState<'boot> {
         let cursor_color = Color { r: 200, g: 200, b: 200 };
         let outline = Color { r: 0, g: 0, b: 0 };
         
-        // simple 3x3 pixel square cursor
         self.fill_rect(cx.saturating_sub(2), cy.saturating_sub(2), 5, 5, outline);
         self.fill_rect(cx.saturating_sub(1), cy.saturating_sub(1), 3, 3, cursor_color);
     }
@@ -413,7 +404,6 @@ impl<'boot> GuiState<'boot> {
                 let start = y * self.screen_width;
                 let end = start + self.screen_width;
                 
-                // Compare pixels by raw bytes
                 let changed = unsafe {
                     let buf_ptr = buf[start..end].as_ptr() as *const u8;
                     let cache_ptr = cache[start..end].as_ptr() as *const u8;
@@ -579,9 +569,18 @@ impl<'boot> GuiState<'boot> {
                         return Some(self.entries[self.selected].clone());
                     }
                     ticks += 1;
+                    let new_timeout = (timeout_ticks - ticks + 99) / 100;
+                    if new_timeout != self.timeout {
+                        self.timeout = new_timeout;
+                        self.dirty = true;
+                    }
                 }
             } else {
-                timeout_ticks = -1; // Abort timeout on input
+                if timeout_ticks != -1 {
+                    timeout_ticks = -1; // Abort timeout on input
+                    self.timeout = -1;
+                    self.dirty = true;
+                }
             }
             
             // Frame-rate limiter: unconditionally wait 10ms to prevent PCIe bus saturation when input is active
