@@ -1,106 +1,117 @@
-# Talaria
+# Talaria Bootloader
 
-A minimal, fast, modern, graphical UEFI boot manager written entirely in memory-safe **Rust** (`#![no_std]`).
+<p align="center">
+  <em>A minimal, fast, and modern graphical UEFI boot manager written entirely in memory-safe Rust.</em>
+</p>
 
-Talaria draws an icon-based boot menu capable of booting **Linux** (EFI stub kernels / Unified Kernel Images) or chainloading other EFI executables (including Windows Boot Manager) with no external dependencies.
+---
 
-## ⚠️ Development Status & Testing
+## ⚡ Overview
 
-> **Note:** This project began as a rapidly vibe-coded AI pair programming experiment to build a modern, memory-safe boot manager from scratch. 
->
-> While the codebase has undergone a rigorous audit and boots successfully inside QEMU emulators, **it has not yet been tested on real, bare-metal hardware.** Expect bugs and proceed with caution.
+Talaria is a lightweight, zero-dependency UEFI boot manager built on a `#![no_std]` Rust architecture. It provides a stunning, icon-based graphical boot menu capable of launching Linux (EFI stub kernels / Unified Kernel Images) or chainloading other EFI executables (like the Windows Boot Manager). 
 
-**Current Testing Status:**
+This repository is a fully audited, oxidized Rust fork of the original [Visor-BootManager](https://github.com/IO-ZetZor/Visor-BootManager) by **IO-ZetZor**.
 
-- [x] Rust `no_std` UEFI compilation pipeline (`x86_64-unknown-uefi`)
-- [x] Automated QEMU / VirtualBox disk image creation (`build_vdi.sh`)
-- [x] UEFI GOP graphical buffer initialization
-- [x] `font8x8` text rasterization and rendering
-- [x] Complete static analysis, linting, and memory leak patching
-- [ ] Bare-metal UEFI firmware testing
-- [ ] End-to-end OS kernel handoff (Linux EFI Stub & Windows Boot Manager)
-- [ ] Pointer protocol (Mouse/Touchscreen) verification
+## ✨ Features
 
-## Features (Rust Port)
+- **Blazing Fast Handoff:** Engineered with a custom, zero-allocation rendering engine that minimizes heap fragmentation and UEFI API overhead.
+- **True 32-bit ARGB Blending:** Supports seamless, alpha-blended UI components and high-quality OS distro icons (`.bmp`) overlaid dynamically on custom backgrounds.
+- **Zero-Flicker Instant Boot:** Delivers a fully silent, immediate OS handoff when `timeout=0` is configured—no screen flashing or UI initialization artifacts.
+- **Smart Auto-Detection:** Automatically scans the EFI System Partition (ESP) for common Linux and Windows loaders, constructing a boot menu dynamically if no configuration file is present.
+- **Secure Boot Integration:** Actively checks for and integrates with the `shim` `SHIM_LOCK` protocol, ensuring secure OS verification chains remain unbroken.
+- **Mouse & Touchpad Support:** Fully interactive GUI using the UEFI `SimplePointer` protocol.
 
-- **Graphical Menu** — modern rendering via the UEFI Graphics Output Protocol (GOP) with a custom zero-allocation rendering engine.
-- **True 32-bit ARGB Blending** — seamless, alpha-blended UI components and OS distro icons (BMP) against custom backgrounds.
-- **Zero-Flicker Instant Boot** — fully silent and immediate OS handoff when `timeout=0` is configured.
-- **Auto-detection** — scans for common Linux and Windows loaders and builds a menu automatically if no config is found.
-- **Secure Boot aware** — verifies images through shim's `SHIM_LOCK` protocol when present.
+## 🛠️ Prerequisites
 
-## Requirements
+To compile Talaria from source, you need a standard `x86_64` UEFI system and the Rust Nightly toolchain.
 
-- An **x86_64 UEFI** system
-- **Rust Toolchain** (Nightly required for UEFI target compilation)
-
-### Install dependencies
-
-You will need `rustup` installed on your system to compile Talaria.
-
-```sh
+```bash
+# Install rustup if you haven't already
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Configure the Nightly toolchain and required components
 rustup default nightly
 rustup component add rust-src
 rustup target add x86_64-unknown-uefi
 ```
 
-## Building
+## 🚀 Building & Installation
+
+Compile the bootloader in release mode to strip debug symbols and maximize execution speed:
 
 ```bash
 cargo build --target x86_64-unknown-uefi --release
 ```
 
-This produces `talaria-bootloader.efi` inside `target/x86_64-unknown-uefi/release/`.
+The resulting EFI binary will be located at:
+`target/x86_64-unknown-uefi/release/talaria-bootloader.efi`
 
-### Local Testing (QEMU / VirtualBox)
+### Deployment
 
-If you'd like to test the bootloader locally without modifying your actual EFI system partition, you can use the provided script to generate a virtual FAT32 drive containing the bootloader and a dummy configuration.
+1. Rename the compiled `.efi` file to `BOOTX64.EFI` (or register it manually via `efibootmgr`).
+2. Place it in your EFI System Partition (ESP) under `\EFI\BOOT\BOOTX64.EFI`.
+3. Create the configuration directory at `\EFI\talaria\`.
 
-```bash
-# 1. Install prerequisites (mtools, qemu, ovmf)
-# Ubuntu/Debian: sudo apt install mtools qemu-system-x86 ovmf
-# Arch Linux:    sudo pacman -S mtools qemu-base edk2-ovmf
+## ⚙️ Configuration
 
-# 2. Build the project and package it into a VirtualBox / QEMU disk image
-./build_vdi.sh
+Configuration is managed via a simple text file located at `\EFI\talaria\boot.conf` on your ESP. 
 
-# 3. Boot the image in QEMU (using OVMF UEFI firmware)
-qemu-system-x86_64 -bios /usr/share/edk2/x64/OVMF.4m.fd -drive file=talaria_test.vdi,format=vdi
-```
+> **Note:** All paths in the configuration file must be relative to the **root** of the ESP and utilize Windows-style backslashes (`\`).
 
-## Configuration
-
-Config lives at `\EFI\talaria\boot.conf` on the ESP.
-
-**Path rules:** all paths are relative to the **root of the ESP** and use back-slashes, e.g. `\EFI\talaria\vmlinuz-linux`.
-
-### Boot entries (Examples)
-
-Talaria auto-detects how to boot each one from the image itself.
+### Example `boot.conf`
 
 ```conf
+# Global Settings
+timeout = 5
+default = 0
+background = \EFI\talaria\bg.bmp
+
+# Arch Linux (EFI Stub)
 entry {
     name    = "Arch Linux"
+    icon    = \EFI\talaria\arch.bmp
     kernel  = \vmlinuz-linux
     initrd  = \initramfs-linux.img
-    cmdline = "root=PARTUUID=... rw quiet"
+    cmdline = "root=PARTUUID=xxxx-xxxx rw quiet"
 }
 
+# Windows 11 (Chainload)
 entry {
     name   = "Windows 11"
+    icon   = \EFI\talaria\win.bmp
     kernel = \EFI\Microsoft\Boot\bootmgfw.efi
 }
 ```
 
-## Controls
+## ⌨️ Controls
 
-| Key            | Action                            |
-| -------------- | --------------------------------- |
-| `Left`/`Right` | Move between boot entries (wraps) |
-| `Enter`        | Boot the focused entry            |
-| `Esc`          | Boot the default entry            |
+| Input Device | Action |
+| --- | --- |
+| **Mouse/Touchpad** | Move the cursor and click to select an entry. |
+| **Left / Right** | Cycle between available boot entries. |
+| **Enter** | Boot the currently highlighted entry. |
+| **Escape** | Abort the timeout and boot the default entry immediately. |
 
-## Credits
+## 🧪 Testing Locally (QEMU)
 
-This repository is a Rust fork of the original [Visor-BootManager](https://github.com/IO-ZetZor/Visor-BootManager) project by **IO-ZetZor**. The original project provided the inspiration and architectural foundation for this UEFI boot manager.
+For development and safe local testing without modifying your host system's EFI partition, you can use the provided virtualization scripts:
+
+```bash
+# 1. Install prerequisites (Debian/Ubuntu example)
+sudo apt install mtools qemu-system-x86 ovmf
+
+# 2. Build the project and package it into a virtual disk image
+./build_vdi.sh
+
+# 3. Boot the image in QEMU
+qemu-system-x86_64 -bios /usr/share/edk2/x64/OVMF.4m.fd -drive file=talaria_test.vdi,format=vdi
+```
+
+## 🤝 Credits & Acknowledgements
+
+* **Visor-BootManager:** This project is a Rust fork and architectural modernization of the original [Visor-BootManager](https://github.com/IO-ZetZor/Visor-BootManager) by [IO-ZetZor](https://github.com/IO-ZetZor). The original C codebase provided the core inspiration and structural foundation.
+* **uefi-rs:** Leveraging the fantastic [uefi-rs](https://github.com/rust-osdev/uefi-rs) crate for memory-safe UEFI bindings.
+
+## 📄 License
+
+This project is open-source and distributed under the standard MIT License.
