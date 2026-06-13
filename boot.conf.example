@@ -1,0 +1,125 @@
+# ============================================================================
+#  Visor boot manager configuration
+#  Location on the EFI System Partition (ESP):  \EFI\visor\boot.conf
+#
+#  Notes on paths:
+#    - All file paths are RELATIVE TO THE ROOT OF THE ESP and use back-slashes,
+#      e.g.  \EFI\visor\icons\arch.png
+#    - Colors are hex in the form  #RRGGBB  (e.g. #7AA2F7).
+#    - Lines starting with '#' are comments. Whitespace around '=' is ignored.
+# ============================================================================
+
+# --- Global settings --------------------------------------------------------
+
+# Seconds before the default entry auto-boots:
+#    N   wait N seconds, then boot the default entry
+#   -1   never auto-boot - wait for the user to choose
+#    0   boot the default entry immediately (skips the menu entirely)
+timeout=5
+
+# Index of the default entry (0-based, in the order entries appear below).
+default=0
+
+# 1 = suppress all boot-progress text (plain black screen during hand-off to
+# the OS instead of "Booting <name>..."). 0 = show progress text.
+quiet=0
+
+# Menu title shown at the top.
+#   (absent / empty) -> the default title "Visor"
+#   none             -> no title at all
+#   anything else    -> shown verbatim
+#title=My Rig
+
+# Text font. Currently only "jetbrains" is bundled. Empty = default.
+#font=jetbrains
+
+# --- Colors -----------------------------------------------------------------
+# Title text color.
+#title_color=#7AA2F7
+# Default color for every entry's name (per-entry "color=" overrides this).
+#name_color=#C0CAF5
+# Accent color of the selection highlight / underline.
+#highlight_color=#7AA2F7
+
+# --- Font sizes (in pixels; 0 / absent = sensible default) ------------------
+# Title height. Default scales with the screen (~ screen_height / 12).
+#title_size=120
+# Entry-name height. Default is 16.
+#name_size=28
+
+# --- Icons (all in pixels; 0 / absent = sensible default) -------------------
+# Icon edge length (icons are square). Default 64.
+#icon_size=128
+# Horizontal gap between icons. Default 60.
+#icon_spacing=80
+# Vertical center of the icon row. Default = middle of the screen.
+#icon_y=560
+
+# --- Selection underline (the accent bar under the selected entry) ----------
+# Color. Defaults to highlight_color if not set.
+#underline_color=#7AA2F7
+# Thickness (height) in pixels. Default 4.
+#underline_thickness=6
+# Length (width) in pixels. Default = icon width + a small margin.
+#underline_length=180
+
+# --- Power actions (Shutdown / Reboot / Firmware) ---------------------------
+# Which corner the three actions are stacked in:
+#   bottomright (default) | bottomleft | topright | topleft
+#power_position=bottomright
+# Color of each action's accent (its first letter / hotkey). Each defaults to
+# highlight_color if not set.
+#shutdown_color=#F7768E
+#reboot_color=#E0AF68
+#firmware_color=#9ECE6A
+
+# --- Background -------------------------------------------------------------
+# Full-screen background image (PNG, RGB or RGBA). Omit for a solid backdrop.
+# If the image is missing or corrupt, Visor falls back to
+# \EFI\visor\backgrounds\default.png, then to a solid color.
+background=\EFI\visor\backgrounds\default.png
+
+# ============================================================================
+#  Menu keys
+#    Left/Right (or Up/Down)   move the selection
+#    Enter                     boot the selected entry
+#    1-9                       boot entry N directly
+#    S / R / F                 Shutdown / Reboot / Firmware setup
+#    Esc                       boot the default entry
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+#  Boot entry format
+#    entry-type {                 (entry-type is "linux" or "windows")
+#        name    = "Display Name"
+#        type    = linux | windows
+#        icon    = \path\to\icon.png
+#        kernel  = \path\to\kernel-or-efi
+#        initrd  = \path\to\initrd          (linux only, optional)
+#        cmdline = "kernel command line"     (linux only, optional)
+#        color   = #RRGGBB                   (optional per-entry name color)
+#        uuid    = partition-uuid            (windows chainload hint, optional)
+#    }
+# ----------------------------------------------------------------------------
+
+# Linux example - EFI stub kernel or Unified Kernel Image (UKI).
+# For a UKI, point "kernel" at the .efi and omit initrd/cmdline.
+# For a plain stub kernel, supply initrd and cmdline as shown.
+linux {
+    name    = "Arch Linux"
+    type    = linux
+    icon    = \EFI\visor\icons\arch.png
+    color   = #1793D1
+    kernel  = \vmlinuz-linux
+    initrd  = \initramfs-linux.img
+    cmdline = "root=PARTUUID=CHANGE-ME-TO-YOUR-ROOT-PARTUUID......"
+}
+
+# Windows example - chainloads the Windows Boot Manager. "kernel" is the path
+# to bootmgfw.efi; Visor loads it via its device path so the BCD is found.
+windows {
+    name   = "Windows 11"
+    type   = windows
+    icon   = \EFI\visor\icons\windows.png
+    kernel = \EFI\Microsoft\Boot\bootmgfw.efi
+}
