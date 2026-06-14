@@ -7,8 +7,8 @@ Visor draws an icon-based boot menu which combines the efficiency and speed of g
 # Visor Menu
 
 <p align="center">
+  <img src="docs/ss2.png" width="49%">
   <img src="docs/ss1.png" width="49%">
-  <img src="docs/ss3.png" width="49%">
 </p> 
 
 ## Features
