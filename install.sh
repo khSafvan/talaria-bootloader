@@ -93,7 +93,7 @@ fi
 
 # --- install binary + assets ------------------------------------------------
 say "Installing into $DEST"
-mkdir -p "$DEST/icons" "$DEST/backgrounds"
+mkdir -p "$DEST/icons" "$DEST/backgrounds" "$DEST/themes"
 install -m 0644 "$EFI_NAME" "$DEST/$EFI_NAME"
 
 if [ -d assets/icons ]; then
@@ -101,6 +101,9 @@ if [ -d assets/icons ]; then
 fi
 if [ -d assets/backgrounds ]; then
     cp -f assets/backgrounds/*.png "$DEST/backgrounds/" 2>/dev/null || true
+fi
+if [ -d assets/themes ]; then
+    cp -f assets/themes/*.conf "$DEST/themes/" 2>/dev/null || true
 fi
 
 # --- default config (do not clobber an existing one) ------------------------
