@@ -13,6 +13,7 @@ typedef struct {
     INTN  timeout;
     UINTN default_entry;
     int   quiet;
+    CHAR16 *theme;
     CHAR16 *title;
     int   no_title;
     CHAR16 *font;
