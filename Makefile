@@ -72,3 +72,5 @@ clean:
 # Build then hand off to install.sh, which locates the ESP and copies assets.
 install: $(TARGET)
 	./install.sh
+
+#lowkeyamazingguynatsukisubaru
