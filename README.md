@@ -15,22 +15,10 @@ Visor draws an icon-based boot menu which combines the efficiency and speed of g
 
 - **Graphical, double-buffered menu** — flicker-free rendering via the UEFI
   Graphics Output Protocol (GOP).
-- **PNG backgrounds and icons** — built-in PNG decoder (RGB and RGBA, all five
-  filter types). No BMP conversion needed.
-- **Scalable text** — a baked JetBrains Mono atlas, bilinearly scaled at
-  runtime. Configurable title and entry-name sizes.
-- **Themable colors** — title color, default entry-name color, selection accent
-  color, and an optional per-entry name color, all as `#RRGGBB`.
-- **Configurable title** — your own text, the default `Visor`, or none at all.
-- **Linux boot** — EFI stub kernels and Unified Kernel Images (UKIs). Kernel
-  command line is passed correctly as UTF-16; the stub handles
-  `ExitBootServices` itself.
-- **Windows boot** — chainloads `bootmgfw.efi` via its device path so the BCD
-  is found (a common failure mode when loading from a memory buffer).
+- **Fluid Animations** - smooth animations for switching between entries.  
+- **Customizable UI** - almost everything u see can be customized.
 - **Auto-detection** — if `boot.conf` is missing, Visor scans for common Linux
   and Windows loaders and builds a menu automatically.
-- **Power actions** — Shutdown, Reboot, and Firmware Setup from the menu.
-- **Quiet mode** — optional black-screen hand-off instead of progress text.
 - **Self-pruning logs** — `boot.log` keeps only the last 3 boots, with
   descriptive messages at every fallible step for easy debugging.
 
@@ -38,7 +26,7 @@ Visor draws an icon-based boot menu which combines the efficiency and speed of g
 
 ## Requirements
 
-- An **x86_64 UEFI** system (GOP-capable firmware — virtually all modern UEFI).
+- An **x86_64 UEFI** system
 - **gnu-efi** development files.
 - **GCC** and **binutils** (`objcopy`).
 - *(Optional)* **Python 3 + Pillow** — only to re-bake a different font; the
@@ -84,12 +72,6 @@ sudo ./install.sh
 
 `install.sh` will:
 
-1. Build `visor_x64.efi` (skip with `--no-build`).
-2. Locate your EFI System Partition (ESP) automatically — or pass
-   `--esp /your/esp/mount`.
-3. Copy the binary and the bundled icons/background into `\EFI\visor\`.
-4. Write a starter `boot.conf` **without overwriting an existing one**.
-
 **Options:**
 
 | Flag               | Effect                                                        |
@@ -115,7 +97,7 @@ Visor is unsigned, so with Secure Boot enabled you must sign it with your own
 keys. The easiest way is [`sbctl`](https://github.com/Foxboron/sbctl):
 
 ```bash
-sudo sbctl sign -s /<ESP>/EFI/visor/visor_x64.efi
+sudo sbctl sign -s <ESP>/EFI/visor/visor_x64.efi
 ```
 
 (Re-run that after every rebuild, since signing covers the exact binary.)
@@ -302,17 +284,7 @@ each boot but retains the **last 3 boots**, and logs every fallible step
 (config parse, PNG decode, image load, hand-off). Read it first when something
 fails — most problems are one descriptive line away.
 
-| Symptom                         | Likely cause / fix                                                            |
-|---------------------------------|-------------------------------------------------------------------------------|
-| **Black screen, no menu**       | Check `boot.log`. Often a bad `background` path or a corrupt PNG.             |
-| **Background shows color noise**| The PNG decoder needs a valid PNG; re-export as 8-bit RGB/RGBA.               |
-| **Linux hangs after selecting** | Wrong `root=` in `cmdline`, or initrd/cmdline supplied for a UKI (drop them). |
-| **Windows "failed to boot"**    | `kernel` must point at the real `\EFI\Microsoft\Boot\bootmgfw.efi`.           |
-| **"Failed to load kernel"**     | Verify the path exists on the ESP and is an EFI stub / UKI.                   |
-| **No graphics at all**          | Firmware must provide GOP; disable CSM / Legacy boot in firmware setup.       |
-
 ---
-
 
 MASSIVELY INSPIRED BY rEFInd!!
 
