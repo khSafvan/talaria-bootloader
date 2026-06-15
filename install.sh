@@ -1,18 +1,5 @@
 #!/usr/bin/env bash
-#
-# install.sh - build and install the Visor boot manager onto the ESP.
-#
-# Usage:
-#   sudo ./install.sh [options]
-#
-# Options:
-#   --esp <path>     Use this ESP mount point instead of auto-detecting.
-#   --no-build       Skip 'make'; install the already-built visor_x64.efi.
-#   --boot-entry     Register a UEFI boot entry with efibootmgr (needs root).
-#   --fallback       Also install as \EFI\BOOT\BOOTX64.EFI (removable/default).
-#   --force-config   Overwrite an existing boot.conf with the bundled example.
-#   -h, --help       Show this help.
-#
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,7 +11,7 @@ DO_BOOT_ENTRY=0
 DO_FALLBACK=0
 FORCE_CONFIG=0
 
-VISOR_DIR_REL="EFI/visor"          # install dir, relative to the ESP root
+VISOR_DIR_REL="EFI/visor"          
 EFI_NAME="visor_x64.efi"
 
 say()  { printf '\033[1;34m::\033[0m %s\n' "$*"; }
@@ -33,7 +20,6 @@ die()  { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
 
-# --- parse args -------------------------------------------------------------
 while [ $# -gt 0 ]; do
     case "$1" in
         --esp)          ESP="${2:-}"; shift 2 ;;
@@ -46,15 +32,12 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# --- locate the ESP ---------------------------------------------------------
 detect_esp() {
-    # 1) systemd's bootctl knows the ESP if it is installed.
     if command -v bootctl >/dev/null 2>&1; then
         local p
         p="$(bootctl --print-esp-path 2>/dev/null || true)"
         [ -n "$p" ] && { echo "$p"; return; }
     fi
-    # 2) Common mount points backed by a vfat filesystem.
     local m
     for m in /boot/efi /efi /boot; do
         if mountpoint -q "$m" 2>/dev/null && \
@@ -62,7 +45,6 @@ detect_esp() {
             echo "$m"; return
         fi
     done
-    # 3) Any mounted vfat partition flagged as an ESP.
     if command -v lsblk >/dev/null 2>&1; then
         lsblk -o MOUNTPOINT,PARTTYPENAME -rn 2>/dev/null | \
             awk -F' ' '/EFI System/ && $1!="" {print $1; exit}'
@@ -79,19 +61,16 @@ say "Using ESP: $ESP"
 
 DEST="$ESP/$VISOR_DIR_REL"
 
-# --- build ------------------------------------------------------------------
 if [ "$DO_BUILD" -eq 1 ]; then
     say "Building $EFI_NAME ..."
     make --no-print-directory
 fi
 [ -f "$EFI_NAME" ] || die "$EFI_NAME not found - build first or drop --no-build."
 
-# --- write access check -----------------------------------------------------
 if [ ! -w "$ESP" ]; then
     die "No write permission on $ESP. Re-run with sudo."
 fi
 
-# --- install binary + assets ------------------------------------------------
 say "Installing into $DEST"
 mkdir -p "$DEST/icons" "$DEST/backgrounds" "$DEST/themes"
 install -m 0644 "$EFI_NAME" "$DEST/$EFI_NAME"
@@ -106,7 +85,6 @@ if [ -d assets/themes ]; then
     cp -f assets/themes/*.conf "$DEST/themes/" 2>/dev/null || true
 fi
 
-# --- default config (do not clobber an existing one) ------------------------
 CONF="$DEST/boot.conf"
 if [ -f "$CONF" ] && [ "$FORCE_CONFIG" -eq 0 ]; then
     say "Keeping existing config: $CONF (use --force-config to replace)"
@@ -116,17 +94,14 @@ else
     warn "Edit $CONF and set your kernel paths / root PARTUUID before rebooting."
 fi
 
-# --- optional fallback bootloader -------------------------------------------
 if [ "$DO_FALLBACK" -eq 1 ]; then
     mkdir -p "$ESP/EFI/BOOT"
     install -m 0644 "$EFI_NAME" "$ESP/EFI/BOOT/BOOTX64.EFI"
     say "Installed fallback: $ESP/EFI/BOOT/BOOTX64.EFI"
 fi
 
-# --- optional UEFI boot entry -----------------------------------------------
 if [ "$DO_BOOT_ENTRY" -eq 1 ]; then
     command -v efibootmgr >/dev/null 2>&1 || die "efibootmgr not installed."
-    # Resolve the disk + partition number backing the ESP.
     src="$(findmnt -no SOURCE "$ESP")" || die "Cannot resolve ESP device."
     disk="/dev/$(lsblk -no PKNAME "$src")"
     partnum="$(lsblk -no PARTN "$src" 2>/dev/null || \
