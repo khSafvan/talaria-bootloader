@@ -16,7 +16,7 @@ Visor draws an icon-based boot menu which combines the efficiency and speed of g
 - **Graphical, double-buffered menu** — flicker-free rendering via the UEFI
   Graphics Output Protocol (GOP).
 - **Fluid Animations** — smooth animations for switching between entries.  
-- **Customizable UI** — almost everything u see can be customized.
+- **Customizable UI** — almost everything you see can be customized.
 - **Auto-detection** — if `boot.conf` is missing, Visor scans for common Linux
   and Windows loaders and builds a menu automatically.
 - **Self-pruning logs** — `boot.log` keeps only the last 3 boots, with
