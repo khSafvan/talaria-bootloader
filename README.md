@@ -69,9 +69,6 @@ of a cryptic compiler error.
 ```bash
 sudo ./install.sh
 ```
-
-`install.sh` will:
-
 **Options:**
 
 | Flag               | Effect                                                        |
