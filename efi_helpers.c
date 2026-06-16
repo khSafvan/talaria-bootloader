@@ -108,6 +108,92 @@ int efi_file_exists(CHAR16 *path) {
     return 0;
 }
 
+UINTN efi_volume_count(void) {
+    UINTN count = 0;
+    EFI_HANDLE *handles = efi_locate_handle_buffer(
+        &gEfiSimpleFileSystemProtocolGuid, &count);
+    if (handles) efi_free_pool(handles);
+    return count;
+}
+
+EFI_FILE_PROTOCOL* efi_open_volume(UINTN index) {
+    UINTN count = 0;
+    EFI_HANDLE *handles = efi_locate_handle_buffer(
+        &gEfiSimpleFileSystemProtocolGuid, &count);
+    if (!handles) return NULL;
+    EFI_FILE_PROTOCOL *root = NULL;
+    if (index < count) {
+        EFI_FILE_IO_INTERFACE *io = NULL;
+        if (!EFI_ERROR(BS->HandleProtocol(handles[index],
+                &gEfiSimpleFileSystemProtocolGuid, (void**)&io))) {
+            if (EFI_ERROR(io->OpenVolume(io, &root))) root = NULL;
+        }
+    }
+    efi_free_pool(handles);
+    return root;
+}
+
+int efi_file_exists_root(EFI_FILE_PROTOCOL *root, CHAR16 *path) {
+    if (!root) return 0;
+    EFI_FILE_PROTOCOL *f = NULL;
+    if (EFI_ERROR(root->Open(root, &f, path, EFI_FILE_MODE_READ, 0)) || !f)
+        return 0;
+    f->Close(f);
+    return 1;
+}
+
+EFI_FILE_PROTOCOL* efi_open_dir(EFI_FILE_PROTOCOL *root, CHAR16 *path) {
+    if (!root) return NULL;
+    EFI_FILE_PROTOCOL *d = NULL;
+    if (EFI_ERROR(root->Open(root, &d, path, EFI_FILE_MODE_READ, 0)))
+        return NULL;
+    return d;
+}
+
+int efi_read_dirent(EFI_FILE_PROTOCOL *dir, CHAR16 *name_out, UINTN name_cap, int *is_dir) {
+    if (!dir || !name_out || name_cap == 0) return 0;
+    UINT8 buf[1024];
+    for (;;) {
+        UINTN size = sizeof(buf);
+        EFI_STATUS s = dir->Read(dir, &size, buf);
+        if (EFI_ERROR(s) || size == 0) return 0;
+        EFI_FILE_INFO *info = (EFI_FILE_INFO *)buf;
+        CHAR16 *fn = info->FileName;
+        if (fn[0] == '.' && (fn[1] == '\0' || (fn[1] == '.' && fn[2] == '\0')))
+            continue;
+        UINTN i = 0;
+        while (fn[i] && i < name_cap - 1) { name_out[i] = fn[i]; i++; }
+        name_out[i] = '\0';
+        if (is_dir) *is_dir = (info->Attribute & EFI_FILE_DIRECTORY) != 0;
+        return 1;
+    }
+}
+
+int efi_readdir(efi_file_t *dir, CHAR16 *name_out, UINTN name_cap, int *is_dir) {
+    if (!dir || !dir->handle || !name_out || name_cap == 0) return 0;
+
+    UINT8 buf[1024];
+    for (;;) {
+        UINTN size = sizeof(buf);
+        EFI_STATUS s = dir->handle->Read(dir->handle, &size, buf);
+        if (EFI_ERROR(s) || size == 0) return 0;
+
+        EFI_FILE_INFO *info = (EFI_FILE_INFO *)buf;
+        CHAR16 *fn = info->FileName;
+
+        if (fn[0] == '.' && (fn[1] == '\0' || (fn[1] == '.' && fn[2] == '\0')))
+            continue;
+
+        UINTN i = 0;
+        while (fn[i] && i < name_cap - 1) { name_out[i] = fn[i]; i++; }
+        name_out[i] = '\0';
+
+        if (is_dir)
+            *is_dir = (info->Attribute & EFI_FILE_DIRECTORY) != 0;
+        return 1;
+    }
+}
+
 efi_file_buffer_t* efi_load_file(CHAR16 *path) {
     efi_file_t *file = efi_fopen(path);
     if (!file) return NULL;
