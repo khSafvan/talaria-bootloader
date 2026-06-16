@@ -39,6 +39,16 @@ typedef struct {
     int    has_shutdown_color;
     int    has_reboot_color;
     int    has_firmware_color;
+    int     power_icons;
+    UINTN   power_icon_size;
+    CHAR16 *shutdown_icon;
+    CHAR16 *reboot_icon;
+    CHAR16 *firmware_icon;
+    int     blur;
+    int     blur_title;
+    color_t blur_color;
+    int     has_blur_color;
+    int     anim_speed;
     boot_entry_t *entries;
     UINTN entry_count;
 } config_t;
