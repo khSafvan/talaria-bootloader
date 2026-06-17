@@ -79,10 +79,8 @@ sudo ./install.sh
 | `--force-config`   | Overwrite an existing `boot.conf` with the bundled example.   |
 
 ```
-
 After installing, **edit `<ESP>/EFI/visor/boot.conf`** to point at your real
 kernels and set your root partition.
-
 ```
 ### Manual installation
 
