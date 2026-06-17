@@ -18,6 +18,7 @@ typedef struct {
     EFI_FILE_PROTOCOL *handle;
 } efi_file_t;
 
+EFI_FILE_PROTOCOL* efi_boot_volume_root(void);
 efi_file_t* efi_fopen(CHAR16 *path);
 void efi_fclose(efi_file_t *file);
 UINTN efi_fread(efi_file_t *file, void *buf, UINTN size);
@@ -37,6 +38,8 @@ typedef struct {
 } efi_file_buffer_t;
 
 efi_file_buffer_t* efi_load_file(CHAR16 *path);
+
+void efi_load_fs_drivers(void);
 
 extern int visor_quiet;
 
