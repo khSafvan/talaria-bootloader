@@ -273,6 +273,37 @@ Most distributions enable these by default. Unified Kernel Images (e.g. from
 `systemd-ukify` or `dracut --uefi`) already bundle the stub, initrd, and
 cmdline — point `kernel` at the `.efi` and omit `initrd`/`cmdline`.
 
+## Booting from non-FAT filesystems (btrfs, ext4, …)
+
+UEFI firmware only exposes **FAT** partitions to boot loaders, so out of the box
+Visor can only read files from a FAT volume (normally the ESP). A kernel/initrd
+on a `btrfs`/`ext4` `/boot` is invisible to the firmware — and, usefully, also
+invisible to Windows, which can't corrupt what it can't see.
+
+**Recommended: Unified Kernel Images (no driver).** A UKI on the FAT ESP at
+`\EFI\Linux\*.efi` bundles the kernel, initrd and cmdline into one EFI binary
+and boots with zero extra code. This is the simplest and most portable setup —
+prefer it unless you specifically want raw `vmlinuz`+`initrd` off a Linux
+filesystem.
+
+**Optional: bring-your-own filesystem driver.** Visor **ships no filesystem
+drivers** (keeping it tiny and free of any driver's license). Instead it loads
+whatever EFI driver *you* place in **`\EFI\visor\drivers\`** — every `*.efi`
+there is started at boot and connected to your disks. Loading happens over the
+UEFI `SimpleFileSystem` protocol at runtime, an arm's-length boundary, so the
+driver's license never attaches to Visor.
+
+Obtain a driver yourself — the open-source `efifs` set (also packaged with
+rEFInd) provides `btrfs_x64.efi`, `ext4_x64.efi`, etc.:
+
+```sh
+mkdir -p /boot/efi/EFI/visor/drivers
+cp <your>/btrfs_x64.efi /boot/efi/EFI/visor/drivers/
+```
+
+`boot.log` reports `drivers: started N, connecting controllers` when this works.
+If Secure Boot is on, the driver must be signed/enrolled (e.g. via `sbctl`) too.
+
 ---
 
 ## Troubleshooting
