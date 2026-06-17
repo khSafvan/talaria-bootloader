@@ -236,7 +236,7 @@ static int scan_uki_dir(config_t *config, EFI_FILE_PROTOCOL *root, CHAR16 *dir) 
         disp[n] = '\0';
         if (n > 4) disp[n - 4] = '\0';
 
-        config_add_entry(config, efi_strdup(disp), NULL, efi_strdup(path),
+        config_add_entry(config, efi_strdup(disp), distro_icon(disp), efi_strdup(path),
                          NULL, NULL, NULL, 0);
         added++;
     }
@@ -259,7 +259,7 @@ static int scan_kernel_dir(config_t *config, EFI_FILE_PROTOCOL *root, CHAR16 *di
 
         CHAR16 path[MAX_PATH];
         SPrint(path, sizeof(path), L"%s\\%s", dir, name);
-        config_add_entry(config, efi_strdup(name), NULL, efi_strdup(path),
+        config_add_entry(config, efi_strdup(name), icon_path_for(L"unknown.png"), efi_strdup(path),
                          NULL, efi_strdup(L"root=PARTUUID= ro quiet"), NULL, 0);
         added++;
     }
@@ -287,7 +287,7 @@ static EFI_STATUS detect_entries(config_t *config) {
         if (!windows_found) {
             for (int i = 0; windows_paths[i] != NULL; i++) {
                 if (efi_file_exists_root(root, windows_paths[i])) {
-                    config_add_entry(config, L"Windows Boot Manager", NULL,
+                    config_add_entry(config, L"Windows Boot Manager", icon_path_for(L"windows.png"),
                                      efi_strdup(windows_paths[i]), NULL, NULL, NULL, 1);
                     windows_found = 1;
                     break;
@@ -465,6 +465,8 @@ static void apply_global(config_t *config, CHAR16 *key, CHAR16 *value) {
         else config->blur = (*value == '1' || *value == 't' || *value == 'y' || *value == 'f') ? 1 : 0;
     } else if (efi_strcmp(key, L"anim_speed") == 0) {
         config->anim_speed = (int)parse_uint(value);
+    } else if (efi_strcmp(key, L"entries_per_page") == 0) {
+        config->entries_per_page = parse_uint(value);
     } else if (efi_strcmp(key, L"blur_title") == 0) {
         config->blur_title = (*value == '1' || *value == 't' || *value == 'y');
     } else if (efi_strcmp(key, L"blur_color") == 0) {
@@ -544,6 +546,7 @@ EFI_STATUS config_parse(config_t *config) {
     config->blur_color = COLOR_WHITE;
     config->has_blur_color = 0;
     config->anim_speed = 0;
+    config->entries_per_page = 0;
     config->power_icons = 0;
     config->power_icon_size = 0;
     config->shutdown_icon = NULL;
