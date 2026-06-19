@@ -127,7 +127,7 @@ static EFI_STATUS parse_entry(config_t *config, CHAR16 **lines, UINTN *idx, UINT
                 kernel_path = dup_path(value);
             } else if (efi_strcmp(key, L"initrd") == 0) {
                 initrd_path = dup_path(value);
-            } else if (efi_strcmp(key, L"cmdline") == 0) {
+            } else if (efi_strcmp(key, L"cmdline") == 0 || efi_strcmp(key, L"options") == 0) {
                 cmdline = efi_strdup(value);
             } else if (efi_strcmp(key, L"uuid") == 0) {
                 uuid = efi_strdup(value);
@@ -244,6 +244,38 @@ static int scan_uki_dir(config_t *config, EFI_FILE_PROTOCOL *root, CHAR16 *dir) 
     return added;
 }
 
+static int is_kernel_name(CHAR16 *name) {
+    if (ends_with_ci(name, L".img")) return 0;
+    if (contains_ci(name, L"initrd") || contains_ci(name, L"initramfs")) return 0;
+    if (lc16(name[0]) == 'v' && lc16(name[1]) == 'm' && lc16(name[2]) == 'l') return 1;
+    if (contains_ci(name, L"bzimage")) return 1;
+    return 0;
+}
+
+static CHAR16* find_initrd(EFI_FILE_PROTOCOL *root, CHAR16 *dir, CHAR16 *kernel_name) {
+    CHAR16 *suffix = efi_strchr(kernel_name, '-');
+    CHAR16 sbuf[96];
+    if (suffix) {
+        UINTN i = 0;
+        while (suffix[i] && i < 95) { sbuf[i] = suffix[i]; i++; }
+        sbuf[i] = '\0';
+    } else {
+        sbuf[0] = '\0';
+    }
+
+    const CHAR16 *patterns[] = {
+        L"%s\\initramfs%s.img", L"%s\\initrd.img%s", L"%s\\initramfs%s",
+        L"%s\\initrd%s.img",    L"%s\\initrd%s",     L"%s\\initramfs.img",
+        L"%s\\initrd.img",      NULL
+    };
+    for (int p = 0; patterns[p]; p++) {
+        CHAR16 cand[MAX_PATH];
+        SPrint(cand, sizeof(cand), patterns[p], dir, sbuf);
+        if (efi_file_exists_root(root, cand)) return efi_strdup(cand);
+    }
+    return NULL;
+}
+
 static int scan_kernel_dir(config_t *config, EFI_FILE_PROTOCOL *root, CHAR16 *dir) {
     EFI_FILE_PROTOCOL *d = efi_open_dir(root, dir);
     if (!d) return 0;
@@ -253,14 +285,18 @@ static int scan_kernel_dir(config_t *config, EFI_FILE_PROTOCOL *root, CHAR16 *di
     int is_dir;
     while (efi_read_dirent(d, name, 128, &is_dir)) {
         if (is_dir) continue;
-        if (lc16(name[0]) != 'v' || lc16(name[1]) != 'm' || lc16(name[2]) != 'l')
-            continue;
-        if (ends_with_ci(name, L".img")) continue;
+        if (!is_kernel_name(name)) continue;
 
         CHAR16 path[MAX_PATH];
         SPrint(path, sizeof(path), L"%s\\%s", dir, name);
-        config_add_entry(config, efi_strdup(name), icon_path_for(L"unknown.png"), efi_strdup(path),
-                         NULL, efi_strdup(L"root=PARTUUID= ro quiet"), NULL, 0);
+        CHAR16 *initrd = find_initrd(root, dir, name);
+
+        efi_log(L"config: auto-detected raw kernel");
+        efi_log(path);
+        if (initrd) efi_log(initrd);
+
+        config_add_entry(config, efi_strdup(name), icon_path_for(L"unknown.png"),
+                         efi_strdup(path), initrd, NULL, NULL, 0);
         added++;
     }
     d->Close(d);
@@ -379,6 +415,31 @@ static void apply_global(config_t *config, CHAR16 *key, CHAR16 *value) {
         }
     } else if (efi_strcmp(key, L"quiet") == 0) {
         config->quiet = (*value == '1' || *value == 't' || *value == 'y');
+    } else if (efi_strcmp(key, L"text_menu") == 0 || efi_strcmp(key, L"text_mode") == 0) {
+        config->text_menu = (*value == '1' || *value == 't' || *value == 'y');
+    } else if (efi_strcmp(key, L"cmdline") == 0 || efi_strcmp(key, L"options") == 0) {
+        config->def_cmdline = (value[0] == '\0') ? NULL : efi_strdup(value);
+    } else if (efi_strcmp(key, L"show_names") == 0 || efi_strcmp(key, L"names") == 0) {
+        config->show_names = (*value == '1' || *value == 't' || *value == 'y');
+    } else if (efi_strcmp(key, L"center_info") == 0 || efi_strcmp(key, L"centre_info") == 0) {
+        config->center_info = (*value == '1' || *value == 't' || *value == 'y');
+    } else if (efi_strcmp(key, L"box_radius") == 0 || efi_strcmp(key, L"corner_radius") == 0) {
+        config->box_radius = parse_uint(value);
+    } else if (efi_strcmp(key, L"resolution") == 0) {
+        config->res_w = 0; config->res_h = 0; config->res_max = 0;
+        if (efi_strcmp(value, L"max") == 0 || efi_strcmp(value, L"highest") == 0) {
+            config->res_max = 1;
+        } else if (efi_strcmp(value, L"native") == 0 || value[0] == '\0') {
+            /* keep firmware default */
+        } else {
+            UINTN w = 0;
+            while (*value >= '0' && *value <= '9') { w = w * 10 + (*value - '0'); value++; }
+            if (*value == 'x' || *value == 'X' || *value == '*') value++;
+            UINTN h = 0;
+            while (*value >= '0' && *value <= '9') { h = h * 10 + (*value - '0'); value++; }
+            if (w && h) { config->res_w = w; config->res_h = h; }
+            else efi_log(L"WARN: invalid resolution (use WxH, e.g. 1920x1080, or max/native)");
+        }
     } else if (efi_strcmp(key, L"theme") == 0) {
         config->theme = (value[0] == '\0') ? NULL : efi_strdup(value);
     } else if (efi_strcmp(key, L"title") == 0) {
@@ -515,6 +576,14 @@ EFI_STATUS config_parse(config_t *config) {
     config->timeout = 5;
     config->default_entry = 0;
     config->quiet = 0;
+    config->text_menu = 0;
+    config->res_w = 0;
+    config->res_h = 0;
+    config->res_max = 0;
+    config->def_cmdline = NULL;
+    config->show_names = 1;
+    config->center_info = 0;
+    config->box_radius = 0;
     config->theme = NULL;
     config->title = NULL;
     config->no_title = 0;
@@ -585,7 +654,7 @@ EFI_STATUS config_parse(config_t *config) {
         if (line[0] == '#' || line[0] == '\0') continue;
 
         CHAR16 *eq = efi_strchr(line, '=');
-        if (eq && line[0] != 'e' && line[0] != 'l' && line[0] != 'w') {
+        if (eq) {
             *eq = '\0';
             CHAR16 *key = trim(line);
             CHAR16 *value = trim(eq + 1);
@@ -628,7 +697,8 @@ boot_entry_t* config_add_entry(config_t *config,
     entry->icon_path = icon_path;
     entry->kernel_path = kernel_path;
     entry->initrd_path = initrd_path;
-    entry->cmdline = cmdline;
+    entry->cmdline = cmdline ? cmdline
+                   : (config->def_cmdline ? efi_strdup(config->def_cmdline) : NULL);
     entry->uuid = uuid;
     entry->type = type;
     entry->index = config->entry_count;
