@@ -317,8 +317,24 @@ void efi_print(CHAR16 *msg, ...) {
 
 #define LOG_PATH     L"\\EFI\\visor\\boot.log"
 #define LOG_MARKER    "===== visor boot ====="
-#define LOG_MARKER_W L"===== visor boot ====="
+#define LOG_MARKER_W L"=================== visor boot ==================="
 #define LOG_KEEP   3
+
+static UINTN log_elapsed_cs(void) {
+    static EFI_EVENT lt = NULL;
+    static UINTN cs = 0;
+    if (!lt) {
+        if (EFI_ERROR(BS->CreateEvent(EVT_TIMER, TPL_APPLICATION, NULL, NULL, &lt))) {
+            lt = NULL;
+            return 0;
+        }
+        BS->SetTimer(lt, TimerPeriodic, 100000ULL);
+        cs = 0;
+        return 0;
+    }
+    while (BS->CheckEvent(lt) == EFI_SUCCESS) cs++;
+    return cs;
+}
 
 static EFI_FILE_PROTOCOL *log_open_root(void) {
     EFI_FILE_PROTOCOL *boot_root = efi_boot_volume_root();
@@ -355,8 +371,15 @@ void efi_log(CHAR16 *msg) {
 
     f->SetPosition(f, 0xFFFFFFFFFFFFFFFFULL);
 
-    UINT8 line[256];
+    UINTN cs = log_elapsed_cs();
+    CHAR16 pfx[20];
+    SPrint(pfx, sizeof(pfx), L"[%4d.%d%d] ",
+           (int)(cs / 100), (int)((cs / 10) % 10), (int)(cs % 10));
+
+    UINT8 line[320];
     UINTN n = 0;
+    for (UINTN i = 0; pfx[i] && n < sizeof(line) - 2; i++)
+        line[n++] = (pfx[i] < 0x80) ? (UINT8)pfx[i] : '?';
     for (UINTN i = 0; msg[i] && n < sizeof(line) - 2; i++) {
         CHAR16 c = msg[i];
         line[n++] = (c < 0x80) ? (UINT8)c : '?';
