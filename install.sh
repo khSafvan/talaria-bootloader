@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,15 +9,38 @@ DO_BUILD=1
 DO_BOOT_ENTRY=-1
 DO_SIGN=-1
 FORCE_CONFIG=0
+FS_DRIVER=""
+INSTALL_CLI=1
+CLI_DIR="${CLI_DIR:-/usr/local/bin}"
 
 VISOR_DIR_REL="EFI/visor"          # install dir, relative to the ESP root
 EFI_NAME="visor_x64.efi"
+CLI_NAME="visor"
 
 say()  { printf '\033[1;34m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
-usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() {
+    cat <<'EOF'
+install.sh - install Visor to the EFI System Partition (ESP)
+
+Usage: ./install.sh [options]
+
+  --esp PATH         ESP mount point (auto-detected if omitted)
+  --no-build         skip 'make'; install the existing visor_x64.efi
+  --boot-entry       add a UEFI boot entry via efibootmgr (else prompted)
+  --no-boot-entry    do not add or prompt for a UEFI boot entry
+  --sign             sign Visor for Secure Boot via sbctl (else prompted)
+  --no-sign          do not sign or prompt for Secure Boot signing
+  --fs-driver PATH   copy an EFI filesystem driver into \EFI\visor\drivers
+  --no-cli           do not install the host-side 'visor' command
+  --cli-dir PATH     directory for the host-side command (default: /usr/local/bin)
+  --force-config     overwrite an existing boot.conf with the default
+  -h, --help         show this help
+EOF
+    exit 0
+}
 
 ask() {
     local prompt="$1" reply
@@ -34,12 +56,25 @@ while [ $# -gt 0 ]; do
         --esp)          ESP="${2:-}"; shift 2 ;;
         --no-build)     DO_BUILD=0; shift ;;
         --boot-entry)   DO_BOOT_ENTRY=1; shift ;;
+        --no-boot-entry) DO_BOOT_ENTRY=0; shift ;;
         --sign)         DO_SIGN=1; shift ;;
+        --no-sign)      DO_SIGN=0; shift ;;
+        --fs-driver)    FS_DRIVER="${2:-}"; shift 2 ;;
+        --no-cli)       INSTALL_CLI=0; shift ;;
+        --cli-dir)      CLI_DIR="${2:-}"; shift 2 ;;
         --force-config) FORCE_CONFIG=1; shift ;;
         -h|--help)      usage ;;
         *)              die "unknown option: $1 (try --help)" ;;
     esac
 done
+
+if [ -n "$FS_DRIVER" ]; then
+    [ -f "$FS_DRIVER" ] || die "fs-driver not found: $FS_DRIVER"
+    case "$FS_DRIVER" in
+        *.efi|*.EFI) ;;
+        *) die "fs-driver must be an .efi file: $FS_DRIVER" ;;
+    esac
+fi
 
 # --- locate the ESP ---------------------------------------------------------
 detect_esp() {
@@ -98,6 +133,14 @@ if [ -d assets/backgrounds ]; then
     cp -f assets/backgrounds/*.png "$DEST/backgrounds/" 2>/dev/null || true
 fi
 
+if [ "$INSTALL_CLI" -eq 1 ] && [ -f "$CLI_NAME" ]; then
+    if mkdir -p "$CLI_DIR" 2>/dev/null && install -m 0755 "$CLI_NAME" "$CLI_DIR/$CLI_NAME" 2>/dev/null; then
+        say "Installed command: $CLI_DIR/$CLI_NAME"
+    else
+        warn "Could not install $CLI_NAME command to $CLI_DIR"
+    fi
+fi
+
 # --- default config (do not clobber an existing one) ------------------------
 CONF="$DEST/boot.conf"
 if [ -f "$CONF" ] && [ "$FORCE_CONFIG" -eq 0 ]; then
@@ -106,6 +149,15 @@ else
     install -m 0644 boot.conf.example "$CONF"
     say "Wrote default config: $CONF"
     warn "Edit $CONF and set your kernel paths / root PARTUUID before rebooting."
+fi
+
+# --- optional filesystem driver (bring-your-own; none bundled) --------------
+DRIVER_DEST=""
+if [ -n "$FS_DRIVER" ]; then
+    mkdir -p "$DEST/drivers"
+    DRIVER_DEST="$DEST/drivers/$(basename "$FS_DRIVER")"
+    install -m 0644 "$FS_DRIVER" "$DRIVER_DEST"
+    say "Installed filesystem driver: $DRIVER_DEST"
 fi
 
 # --- optional UEFI boot entry -----------------------------------------------
@@ -139,6 +191,10 @@ if [ "$DO_SIGN" -eq 1 ]; then
     else
         say "Signing $DEST/$EFI_NAME with sbctl"
         sbctl sign -s "$DEST/$EFI_NAME" || warn "sbctl sign failed (are keys enrolled?)."
+        if [ -n "$DRIVER_DEST" ]; then
+            say "Signing $DRIVER_DEST with sbctl"
+            sbctl sign -s "$DRIVER_DEST" || warn "sbctl sign failed for the driver."
+        fi
     fi
 fi
 
