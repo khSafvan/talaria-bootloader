@@ -102,7 +102,6 @@ visor status
 visor config validate --esp /boot/efi
 visor uninstall --esp /boot/efi
 visor clean
-visor doctor
 ```
 
 `visor install` passes its arguments through to `install.sh`. `visor sign`
