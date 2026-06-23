@@ -19,6 +19,10 @@ Visor draws an icon-based boot menu which combines the efficiency and speed of g
 - **Customizable UI** — almost everything you see can be customized.
 - **Auto-detection** — if `boot.conf` is missing, Visor scans for common Linux
   and Windows loaders and builds a menu automatically.
+- **Mouse & touch** — pointer cursor with single-click-to-boot, when the firmware
+  exposes a pointer device.
+- **Secure Boot aware** — verifies images through shim's `SHIM_LOCK` protocol when
+  present, and refuses an unverifiable kernel under Secure Boot.
 - **Self-pruning logs** — `boot.log` keeps only the last 3 boots, with
   descriptive messages at every fallible step for easy debugging.
 
@@ -40,6 +44,7 @@ Visor draws an icon-based boot menu which combines the efficiency and speed of g
 | Debian / Ubuntu   | `sudo apt install gnu-efi build-essential`         |
 | Fedora            | `sudo dnf install gnu-efi gnu-efi-devel gcc make`  |
 | openSUSE          | `sudo zypper in gnu-efi-devel gcc make`            |
+| Void              | `sudo xbps-install gnu-efi gcc make`               |
 
 ---
 
@@ -166,7 +171,11 @@ back-slashes, e.g. `\EFI\visor\icons\arch.png`. Colors are `#RRGGBB`.
 | `entries_per_page`| Entries shown per page. Default `3`.                                                                       |
 | `title`           | Menu title. Empty/absent = `Visor` · `none` = no title · else verbatim.                                    |
 | `font`            | Text font. Currently `jetbrains`. Empty = default.                                                         |
-| `theme`           | Load `themes/<name>.conf`; its UI values override those in `boot.conf`. See [Themes](#themes).             |
+| `theme`           | Load `themes/<name>.conf`; its UI values override those in `boot.conf`. `random` = pick a random theme each boot · `cycle` = advance to the next theme each boot (saved in NVRAM). See [Themes](#themes). |
+| `remember_last`   | `1` = remember the last-booted entry and preselect it next time (NVRAM); **overrides** `default=`. `0` = always use `default=`. |
+| `recovery_entries`| `1` = auto-add a `<name> (recovery)` entry per Linux entry, appending `systemd.unit=rescue.target nomodeset`. |
+| `mouse`           | `1` = mouse/touchpad/touchscreen cursor; **single click** boots an entry or runs a power icon · `0` = off. |
+| `editor`          | `1` = allow editing a kernel command line at the menu with `e` (one-shot) · `0` = disable.                 |
 | `title_color`     | Title text color, `#RRGGBB`.                                                                               |
 | `name_color`      | Default entry-name color, `#RRGGBB`.                                                                       |
 | `box_radius`      | Corner radius (in pixels) of the selection highlight / frost box. 0 = Default                              |
@@ -299,11 +308,13 @@ background=\EFI\visor\backgrounds\default.png
 | `Down`         | Enter the power column (Shutdown), then move down it                 |
 | `Up`           | Move up the power column; from the top, return to the boot entries   |
 | `Enter`        | Boot the focused entry, or run the focused power action              |
+| `e`            | Edit the focused entry's kernel command line, then boot it (one-shot) |
 | `1`–`9`        | Boot entry N directly                                                |
 | `Esc`          | Boot the default entry                                               |
 | `S`            | Shut down (works from anywhere)                                      |
 | `R`            | Reboot (works from anywhere)                                         |
 | `F`            | Enter firmware setup (works from anywhere)                           |
+| Mouse / touch  | Move to show a cursor; **single click** an icon to boot it, or a power icon to run it |
 
 
 
@@ -341,6 +352,25 @@ cp <your>/btrfs_x64.efi <ESP>/EFI/visor/drivers/
 
 `boot.log` reports `drivers: started N, connecting controllers` when this works.
 If Secure Boot is on, the driver must be signed/enrolled (e.g. via `sbctl`) too.
+
+---
+
+## Secure Boot
+
+Visor is Secure Boot aware. Before launching any image it asks shim's `SHIM_LOCK`
+protocol to verify it (the same trust path used when Visor is itself started by
+`shimx64.efi`):
+
+- **PE images** (Windows Boot Manager, UKIs, EFI-stub kernels) — if shim is present
+  and verification fails, the boot is refused. If shim is absent, the firmware's own
+  image verification (via `LoadImage`) still applies under Secure Boot.
+- **Raw (non-PE) kernels** booted through the EFI handover protocol bypass firmware
+  verification entirely, so under Secure Boot Visor refuses them unless shim verifies
+  them first.
+
+With Secure Boot **off**, everything boots as before. For a fully signed chain, sign
+`visor_x64.efi` (and any efifs driver) and enrol the keys with `sbctl`, or boot Visor
+via shim so shim validates your kernels against the enrolled db/MOK.
 
 ---
 
