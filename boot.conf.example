@@ -7,6 +7,11 @@
 #      e.g.  \EFI\visor\icons\arch.png
 #    - Colors are hex in the form  #RRGGBB  (e.g. #7AA2F7).
 #    - Lines starting with '#' are comments. Whitespace around '=' is ignored.
+#    - Kernels/initrds on a non-FAT /boot (btrfs, ext4, ...) are unreadable by
+#      UEFI unless you drop an efifs driver into \EFI\visor\drivers\ - then the
+#      path is relative to that filesystem's root, e.g. \boot\vmlinuz-...
+#      (see "Booting from non-FAT filesystems" in the README). A UKI on the ESP
+#      under \EFI\Linux\*.efi always works without a driver.
 # ============================================================================
 
 # --- Global settings --------------------------------------------------------
@@ -19,6 +24,10 @@ timeout=5
 
 # Index of the default entry (0-based, in the order entries appear below).
 default=0
+
+# 1 = suppress all boot-progress text (plain black screen during hand-off to
+# the OS instead of "Booting <name>..."). 0 = show progress text.
+quiet=0
 
 # 1 = use the plain text-console menu instead of the graphical one, even when a
 # graphics adapter is available. Visor ALSO falls back to this text menu
@@ -34,9 +43,10 @@ default=0
 # kept. Has no effect in text mode.
 #resolution=native
 
-# 1 = suppress all boot-progress text (plain black screen during hand-off to
-# the OS instead of "Booting <name>..."). 0 = show progress text.
-quiet=0
+# Global default kernel command line. Applied to any entry that does not set its
+# own cmdline/options - including auto-detected raw kernels (which otherwise have
+# no root=). Per-entry cmdline always wins. (alias: options)
+#cmdline=root=PARTUUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx rw quiet
 
 # Graphical menu - show the name label under each icon. 0 = icons only.
 #show_names=1
@@ -49,6 +59,24 @@ quiet=0
 # Corner radius (in pixels) of the selection highlight / frost box. 0 = built-in
 # default. Larger = rounder; small values = squarer corners. (alias: corner_radius)
 #box_radius=14
+
+# Remember the last-booted entry and preselect it next time (persisted in an NVRAM
+# variable). When on, this OVERRIDES default=. 0 = always honour default=. (alias: remember)
+#remember_last=0
+
+# Auto-generate a "<name> (recovery)" entry for each Linux entry, appending
+# "systemd.unit=rescue.target nomodeset" to its cmdline. 0 = off. (alias: recovery)
+#recovery_entries=0
+
+# Mouse / touchpad / touchscreen support in the graphical menu. A cursor appears
+# when a pointer device is present; a single click on an icon boots it, and clicks
+# on the power icons trigger them. 1 = on (default), 0 = off. (alias: pointer)
+#mouse=1
+
+# Allow editing an entry's kernel command line at the menu: select an entry and
+# press 'e', edit, Enter boots with the change (one-shot, not saved). Set 0 to
+# disable (e.g. on locked-down machines). 1 = on (default).
+#editor=1
 
 # Menu title shown at the top.
 #   (absent / empty) -> the default title "Visor"
@@ -63,6 +91,9 @@ quiet=0
 # that file OVERRIDE the ones below. A theme file may contain any of the UI keys
 # in this file (colors, sizes, icons, underline, power, background, title...).
 # Boot entries always stay here in boot.conf - themes are UI-only.
+#   <name>   load \EFI\visor\themes\<name>.conf
+#   random   pick a random theme from \EFI\visor\themes\ on each boot
+#   cycle    advance to the next theme each boot (position saved in NVRAM)
 #theme=nord
 
 # --- Colors -----------------------------------------------------------------
@@ -160,7 +191,7 @@ background=\EFI\visor\backgrounds\default.png
 
 # ----------------------------------------------------------------------------
 #  Boot entry format
-#    entry {                                   
+#    entry {                                    (one block type for everything)
 #        name      = "Display Name"
 #        icon      = \path\to\icon.png
 #        icon_size = 128                       (optional - overrides global icon_size)
@@ -204,14 +235,13 @@ background=\EFI\visor\backgrounds\default.png
 #    kernel  = \vmlinuz-linux
 #    initrd  = \initramfs-linux.img
 #    cmdline = "root=PARTUUID=CHANGE-ME-TO-YOUR-ROOT-PARTUUID......"
-#}
+}
 
 # Windows example - chainloads the Windows Boot Manager. "kernel" is the path
 # to bootmgfw.efi; Visor detects the PE image and loads it via its device path
 # so the BCD is found. No type= needed.
 #entry {
-#    name   = "Windows"
+#    name   = "Windows 11"
 #    icon   = \EFI\visor\icons\windows.png
 #   kernel = \EFI\Microsoft\Boot\bootmgfw.efi
-#}
-
+}
