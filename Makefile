@@ -1,12 +1,10 @@
-# Minimal EFI Boot Manager Makefile
-# Targets x86_64 UEFI systems
-
 ARCH = x86_64
 TARGET = visor_x64.efi
 BUILD_DIR = build
 
 EFI_CFLAGS = -ffreestanding -fno-stack-protector -fno-strict-aliasing \
              -fno-asynchronous-unwind-tables -fno-unwind-tables \
+             -fcf-protection=none -fno-PIE \
              -fpic -fshort-wchar -fvisibility=hidden -DGNU_EFI_USE_MS_ABI \
              -mno-red-zone -Wall -Wextra -O2 -I include -MMD -MP
 
@@ -36,9 +34,19 @@ OBJS = $(SRCS:.c=.o)
 FONT    ?= /usr/share/fonts/TTF/JetBrainsMono-Regular.ttf
 FONT_PX ?= 64
 
-.PHONY: all clean install bakefont check-env
+.PHONY: all clean install bakefont check-env check-reloc
 
 all: check-env $(TARGET)
+
+check-reloc:
+	@va=$$(objdump -p $(TARGET) 2>/dev/null | awk '/Virtual Address:/{print $$3; exit}'); \
+	if [ -z "$$va" ]; then echo "WARN: could not read .reloc PageRVA (objdump?)"; exit 0; fi; \
+	if [ $$((0x$$va)) -gt $$((0x32000 + 0x10000)) ]; then \
+	  echo "ERROR: .reloc PageRVA 0x$$va is out of range - image would fail to boot."; \
+	  echo "       Your binutils miswrote the relocation block; build aborted."; \
+	  exit 1; \
+	fi; \
+	echo "reloc: PageRVA 0x$$va OK"
 
 check-env:
 	@test -n "$(GNU_EFI_INC)" || { \
@@ -59,6 +67,9 @@ $(TARGET): $(OBJS)
 	$(OBJCOPY) -j .text -j .sdata -j .data -j .rodata -j .dynamic \
 		   -j .dynsym  -j .dynstr -j .rel* -j .reloc \
 		   -O pei-x86-64 --subsystem=10 $(BUILD_DIR)/visor.so $(TARGET)
+	@printf '\000\020\000\000\014\000\000\000\000\000\000\000' > $(BUILD_DIR)/reloc.bin
+	$(OBJCOPY) --update-section .reloc=$(BUILD_DIR)/reloc.bin $(TARGET)
+	@$(MAKE) --no-print-directory check-reloc
 
 %.o: %.c
 	$(CC) $(EFI_CFLAGS) \
