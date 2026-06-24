@@ -48,6 +48,20 @@ Visor draws an icon-based boot menu which combines the efficiency and speed of g
 
 ---
 
+### Quick Install
+
+Installs the build tools for your distro, downloads Visor, builds it, and
+installs it — all in one go:
+
+```sh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/IO-ZetZor/Visor-BootManager/main/get.sh)"
+```
+
+(or with `wget`)
+```sh
+sh -c "$(wget -qO- https://raw.githubusercontent.com/IO-ZetZor/Visor-BootManager/main/get.sh)"
+```
+
 ## Building
 
 ```bash
@@ -66,22 +80,6 @@ If gnu-efi is missing, `make` stops early with an explanatory message instead
 of a cryptic compiler error.
 
 ---
-
-## Installation
-
-### One-line install
-
-Installs the build tools for your distro, downloads Visor, builds it, and
-installs it — all in one go:
-
-```sh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/IO-ZetZor/Visor-BootManager/main/get.sh)"
-```
-
-(or with `wget`)
-```sh
-sh -c "$(wget -qO- https://raw.githubusercontent.com/IO-ZetZor/Visor-BootManager/main/get.sh)"
-```
 
 ### Manual install 
 
