@@ -1,6 +1,6 @@
 # Visor 
 
-A minimal, fast, graphical UEFI boot manager. 
+A minimal, fast, modern, graphical UEFI boot manager. 
 
 Visor draws an icon-based boot menu which combines the efficiency and speed of grub with the beauty of refind, capable of booting **Linux** (EFI stub kernels / Unified Kernel Images) or chainloading other efi executables (including Windows Boot Manager)  no external dependencies, no scripting bs — just a config and ur imagination.
 
