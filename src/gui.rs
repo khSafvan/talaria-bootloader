@@ -157,11 +157,9 @@ impl<'boot> GuiState<'boot> {
         
         while self.running {
             self.flush();
+            let key_opt = system_table.stdin().read_key().unwrap_or(None);
             
-            let mut events = [system_table.stdin().wait_for_key_event()];
-            let _ = system_table.boot_services().wait_for_event(&mut events);
-            
-            if let Ok(Some(key)) = system_table.stdin().read_key() {
+            if let Some(key) = key_opt {
                 match key {
                     uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::LEFT) | 
                     uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::UP) => {
@@ -206,6 +204,8 @@ impl<'boot> GuiState<'boot> {
                     }
                     _ => {}
                 }
+            } else {
+                system_table.boot_services().stall(10_000);
             }
         }
         

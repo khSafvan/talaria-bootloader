@@ -32,7 +32,12 @@ pub fn boot_windows(image_handle: Handle, system_table: &mut SystemTable<Boot>, 
     }
     
     let bs = system_table.boot_services();
-    let loaded_image_handle = match bs.load_image(image_handle, LoadImageSource::FromBuffer { buffer: &buffer, file_path: None }) {
+    let device_path_protocol = bs.open_protocol_exclusive::<DevicePath>(image_handle).ok();
+    
+    let loaded_image_handle = match bs.load_image(image_handle, LoadImageSource::FromBuffer { 
+        buffer: &buffer, 
+        file_path: device_path_protocol.as_deref() 
+    }) {
         Ok(h) => h,
         Err(e) => return e.status(),
     };
@@ -66,20 +71,27 @@ pub fn boot_linux(image_handle: Handle, system_table: &mut SystemTable<Boot>, en
     }
     
     let bs = system_table.boot_services();
-    let loaded_image_handle = match bs.load_image(image_handle, LoadImageSource::FromBuffer { buffer: &buffer, file_path: None }) {
+    let device_path_protocol = bs.open_protocol_exclusive::<DevicePath>(image_handle).ok();
+    
+    let loaded_image_handle = match bs.load_image(image_handle, LoadImageSource::FromBuffer { 
+        buffer: &buffer, 
+        file_path: device_path_protocol.as_deref() 
+    }) {
         Ok(h) => h,
         Err(e) => return e.status(),
     };
     
     if let Some(cmdline) = &entry.cmdline {
         if let Ok(mut loaded_image) = bs.open_protocol_exclusive::<LoadedImage>(loaded_image_handle) {
-            let mut cmdline_utf16: Vec<u16> = cmdline.encode_utf16().chain(core::iter::once(0)).collect();
-            unsafe {
-                loaded_image.set_load_options(cmdline_utf16.as_mut_ptr() as *mut u8, (cmdline_utf16.len() * 2) as u32);
+            let cmdline_utf16: Vec<u16> = cmdline.encode_utf16().chain(core::iter::once(0)).collect();
+            let size = cmdline_utf16.len() * 2;
+            
+            if let Ok(ptr) = bs.allocate_pool(uefi::table::boot::MemoryType::LOADER_DATA, size) {
+                unsafe {
+                    core::ptr::copy_nonoverlapping(cmdline_utf16.as_ptr() as *const u8, ptr, size);
+                    loaded_image.set_load_options(ptr, size as u32);
+                }
             }
-            // Memory leak of cmdline_utf16 is avoided because UEFI copies or we just leak it intentionally since we're booting.
-            // Actually, we must ensure it lives long enough. Let's leak it.
-            core::mem::forget(cmdline_utf16);
         }
     }
     
