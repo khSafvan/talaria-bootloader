@@ -60,6 +60,8 @@ pub struct BootEntry {
 
 pub struct GuiState<'boot> {
     pub gop: Option<&'boot mut uefi::proto::console::gop::GraphicsOutput<'boot>>,
+    pub pointer: Option<uefi::proto::ScopedProtocol<'boot, uefi::proto::console::pointer::SimplePointer>>,
+    
     pub screen_width: usize,
     pub screen_height: usize,
     pub bpp: usize,
@@ -95,6 +97,7 @@ impl<'boot> GuiState<'boot> {
     pub fn new() -> Self {
         Self {
             gop: None,
+            pointer: None,
             screen_width: 0,
             screen_height: 0,
             bpp: 4,
@@ -268,48 +271,46 @@ impl<'boot> GuiState<'boot> {
                         }
                     }
                     uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::ESCAPE) => {
+                        self.running = false;
+                        let safe_default = if self.default_entry < self.entries.len() { self.default_entry } else { 0 };
                         if !self.entries.is_empty() {
-                            self.selected = 0;
-                            self.running = false;
-                            return Some(self.entries[0].clone());
+                            return Some(self.entries[safe_default].clone());
                         }
                     }
                     _ => {}
                 }
             }
             
-            let bs = system_table.boot_services();
-            if let Ok(pointer_handle) = bs.get_handle_for_protocol::<uefi::proto::console::pointer::SimplePointer>() {
-                if let Ok(mut pointer) = bs.open_protocol_exclusive::<uefi::proto::console::pointer::SimplePointer>(pointer_handle) {
-                    if let Ok(Some(state)) = pointer.read_state() {
-                        input_received = true;
-                        
-                        let dx = state.relative_movement_x as isize;
-                        let dy = state.relative_movement_y as isize;
-                        
-                        if self.cursor_x == -1 {
-                            self.cursor_x = (self.screen_width / 2) as isize;
-                            self.cursor_y = (self.screen_height / 2) as isize;
-                        }
-                        
-                        self.cursor_x = (self.cursor_x + dx).clamp(0, self.screen_width as isize - 1);
-                        self.cursor_y = (self.cursor_y + dy).clamp(0, self.screen_height as isize - 1);
-                        if dx != 0 || dy != 0 {
-                            self.dirty = true;
-                        }
-                        
-                        if state.left_button {
-                            if !self.entries.is_empty() {
-                                self.running = false;
-                                return Some(self.entries[self.selected].clone());
-                            }
+            if let Some(pointer) = &mut self.pointer {
+                if let Ok(Some(state)) = pointer.read_state() {
+                    input_received = true;
+                    
+                    let dx = state.relative_movement_x as isize;
+                    let dy = state.relative_movement_y as isize;
+                    
+                    if self.cursor_x == -1 {
+                        self.cursor_x = (self.screen_width / 2) as isize;
+                        self.cursor_y = (self.screen_height / 2) as isize;
+                    }
+                    
+                    let max_x = (self.screen_width as isize - 1).max(0);
+                    let max_y = (self.screen_height as isize - 1).max(0);
+                    self.cursor_x = (self.cursor_x + dx).clamp(0, max_x);
+                    self.cursor_y = (self.cursor_y + dy).clamp(0, max_y);
+                    if dx != 0 || dy != 0 {
+                        self.dirty = true;
+                    }
+                    
+                    if state.left_button {
+                        if !self.entries.is_empty() {
+                            self.running = false;
+                            return Some(self.entries[self.selected].clone());
                         }
                     }
                 }
             }
 
             if !input_received {
-                system_table.boot_services().stall(10_000);
                 if timeout_ticks > 0 {
                     ticks += 1;
                     if ticks >= timeout_ticks {
@@ -322,6 +323,9 @@ impl<'boot> GuiState<'boot> {
             } else {
                 ticks = 0;
             }
+            
+            // Frame-rate limiter: unconditionally wait 10ms to prevent PCIe bus saturation when input is active
+            system_table.boot_services().stall(10_000);
         }
         
         None

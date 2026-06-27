@@ -74,9 +74,13 @@ fn main(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     let gop_handle = bs.get_handle_for_protocol::<uefi::proto::console::gop::GraphicsOutput>();
     let gop = gop_handle.ok().and_then(|h| bs.open_protocol_exclusive::<uefi::proto::console::gop::GraphicsOutput>(h).ok());
     
+    let pointer_handle = bs.get_handle_for_protocol::<uefi::proto::console::pointer::SimplePointer>();
+    let pointer = pointer_handle.ok().and_then(|h| bs.open_protocol_exclusive::<uefi::proto::console::pointer::SimplePointer>(h).ok());
+    
     if let Some(mut gop_proto) = gop {
         let mut gui = gui::GuiState {
             gop: Some(&mut *gop_proto),
+            pointer: pointer,
             entries: config.entries.clone(),
             timeout: config.timeout,
             default_entry: config.default_entry,

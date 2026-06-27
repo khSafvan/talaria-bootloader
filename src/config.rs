@@ -178,6 +178,22 @@ impl<'a> Config<'a> {
                         "kernel" => current_entry.kernel_path = Some(alloc::string::String::from(value)),
                         "initrd" => current_entry.initrd_path = Some(alloc::string::String::from(value)),
                         "cmdline" => current_entry.cmdline = Some(alloc::string::String::from(value)),
+                        "sha256" => {
+                            if value.len() == 64 {
+                                let mut hash = [0u8; 32];
+                                let mut valid = true;
+                                for i in 0..32 {
+                                    match u8::from_str_radix(&value[i*2..i*2+2], 16) {
+                                        Ok(b) => hash[i] = b,
+                                        Err(_) => { valid = false; break; }
+                                    }
+                                }
+                                if valid {
+                                    current_entry.sha256 = hash;
+                                    current_entry.has_sha256 = true;
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 } else {

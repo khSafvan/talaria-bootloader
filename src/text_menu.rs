@@ -57,12 +57,12 @@ pub fn show_text_menu(system_table: &mut SystemTable<Boot>, entries: &[BootEntry
                     }
                 }
                 Key::Special(ScanCode::ESCAPE) => {
-                    return Some(default_entry);
+                    let safe_default = if default_entry < entries.len() { default_entry } else { 0 };
+                    return Some(safe_default);
                 }
                 _ => {}
             }
         } else {
-            system_table.boot_services().stall(100_000); // 100ms
             if timeout_ticks > 0 {
                 ticks += 1;
                 if ticks >= timeout_ticks {
@@ -72,5 +72,8 @@ pub fn show_text_menu(system_table: &mut SystemTable<Boot>, entries: &[BootEntry
                 }
             }
         }
+        
+        // Unconditional 100ms limiter
+        system_table.boot_services().stall(100_000);
     }
 }
