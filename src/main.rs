@@ -24,28 +24,49 @@ fn main(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     info!("talaria-bootloader (Rust) loading...");
 
     let config_path = "\\talaria\\boot.conf";
-    let config_content = match efi_helpers::read_file_to_string(&system_table, image_handle, config_path) {
-        Some(c) => c,
-        None => {
-            log::error!("Failed to read boot.conf at {}", config_path);
-            system_table.boot_services().stall(5_000_000);
-            return Status::NOT_FOUND;
-        }
-    };
+    let mut config = config::Config::default();
     
-    let config = match config::Config::parse_str(&config_content) {
-        Ok(c) => c,
-        Err(e) => {
-            log::error!("Failed to parse config: {:?}", e);
-            system_table.boot_services().stall(5_000_000);
-            return Status::INVALID_PARAMETER;
+    if let Some(config_content) = efi_helpers::read_file_to_string(&system_table, image_handle, config_path) {
+        match config::Config::parse_str(&config_content) {
+            Ok(c) => config = c,
+            Err(e) => log::error!("Failed to parse config: {:?}", e),
         }
-    };
+    } else {
+        log::warn!("Failed to read boot.conf at {}, auto-detecting...", config_path);
+    }
     
     if config.entries.is_empty() {
-        log::error!("No boot entries found in config!");
-        system_table.boot_services().stall(5_000_000);
-        return Status::NOT_FOUND;
+        log::info!("No boot entries found, generating auto-detect menu...");
+        config.entries.push(gui::BootEntry {
+            name: alloc::string::String::from("Windows Boot Manager"),
+            icon_path: None,
+            kernel_path: Some(alloc::string::String::from("\\EFI\\Microsoft\\Boot\\bootmgfw.efi")),
+            initrd_path: None,
+            cmdline: None,
+            uuid: None,
+            index: 0,
+            entry_type: 0,
+            icon_size: 64,
+            color: gui::COLOR_BLUE,
+            has_color: true,
+            sha256: [0; 32],
+            has_sha256: false,
+        });
+        config.entries.push(gui::BootEntry {
+            name: alloc::string::String::from("Linux (Auto)"),
+            icon_path: None,
+            kernel_path: Some(alloc::string::String::from("\\EFI\\Linux\\BOOTX64.EFI")),
+            initrd_path: None,
+            cmdline: None,
+            uuid: None,
+            index: 1,
+            entry_type: 0,
+            icon_size: 64,
+            color: gui::COLOR_WHITE,
+            has_color: true,
+            sha256: [0; 32],
+            has_sha256: false,
+        });
     }
     
     let mut selected_entry = None;
@@ -67,7 +88,7 @@ fn main(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
         selected_entry = gui.run(&mut system_table);
         selected_action = gui.action;
     } else {
-        if let Some(idx) = text_menu::show_text_menu(&mut system_table, &config.entries) {
+        if let Some(idx) = text_menu::show_text_menu(&mut system_table, &config.entries, config.timeout, config.default_entry) {
             selected_entry = Some(config.entries[idx].clone());
         }
     }
@@ -83,13 +104,10 @@ fn main(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     }
     
     if let Some(entry) = selected_entry {
-        let status = if entry.os_type == "windows" {
-            boot::boot_windows(image_handle, &mut system_table, &entry)
-        } else if entry.os_type == "linux" {
+        let status = if entry.cmdline.is_some() || entry.initrd_path.is_some() {
             boot::boot_linux(image_handle, &mut system_table, &entry)
         } else {
-            log::error!("Unknown OS type: {}", entry.os_type);
-            Status::UNSUPPORTED
+            boot::boot_windows(image_handle, &mut system_table, &entry)
         };
         
         if status.is_error() {
