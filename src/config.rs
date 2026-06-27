@@ -56,7 +56,7 @@ pub struct Config<'a> {
     pub has_blur_color: bool,
     pub anim_speed: i32,
     pub entries_per_page: usize,
-    pub entries: Vec<BootEntry<'a>>,
+    pub entries: Vec<BootEntry>,
 }
 
 impl<'a> Default for Config<'a> {

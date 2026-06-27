@@ -24,13 +24,11 @@ fn main(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     info!("talaria-bootloader (Rust) loading...");
 
     let config_path = "\\talaria\\boot.conf";
+    let config_content = efi_helpers::read_file_to_string(&system_table, image_handle, config_path);
     let mut config = config::Config::default();
     
-    if let Some(config_content) = efi_helpers::read_file_to_string(&system_table, image_handle, config_path) {
-        match config::Config::parse_str(&config_content) {
-            Ok(c) => config = c,
-            Err(e) => log::error!("Failed to parse config: {:?}", e),
-        }
+    if let Some(content) = &config_content {
+        config = config::Config::parse_str(content);
     } else {
         log::warn!("Failed to read boot.conf at {}, auto-detecting...", config_path);
     }
@@ -78,7 +76,7 @@ fn main(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     
     if let Some(mut gop_proto) = gop {
         let mut gui = gui::GuiState {
-            gop: Some(&mut gop_proto),
+            gop: Some(&mut *gop_proto),
             entries: config.entries.clone(),
             timeout: config.timeout,
             default_entry: config.default_entry,
