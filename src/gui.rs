@@ -73,6 +73,11 @@ pub struct GuiState<'boot> {
     pub action: i32,
     pub focus: i32,
     
+    pub timeout: isize,
+    pub default_entry: usize,
+    pub cursor_x: isize,
+    pub cursor_y: isize,
+    
     pub title: Option<String>,
     pub show_title: bool,
     pub show_names: bool,
@@ -100,6 +105,10 @@ impl<'boot> GuiState<'boot> {
             running: false,
             action: 0,
             focus: 0,
+            timeout: 5,
+            default_entry: 0,
+            cursor_x: -1, // -1 implies hidden until moved
+            cursor_y: -1,
             title: None,
             show_title: true,
             show_names: true,
@@ -154,12 +163,17 @@ impl<'boot> GuiState<'boot> {
     
     pub fn run(&mut self, system_table: &mut uefi::prelude::SystemTable<uefi::prelude::Boot>) -> Option<BootEntry> {
         self.running = true;
+        let mut ticks: isize = 0;
+        let timeout_ticks = self.timeout * 100;
         
         while self.running {
             self.flush();
+            let mut input_received = false;
+            
             let key_opt = system_table.stdin().read_key().unwrap_or(None);
             
             if let Some(key) = key_opt {
+                input_received = true;
                 match key {
                     uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::LEFT) | 
                     uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::UP) => {
@@ -204,8 +218,48 @@ impl<'boot> GuiState<'boot> {
                     }
                     _ => {}
                 }
-            } else {
+            }
+            
+            let bs = system_table.boot_services();
+            if let Ok(pointer_handle) = bs.get_handle_for_protocol::<uefi::proto::console::pointer::SimplePointer>() {
+                if let Ok(mut pointer) = bs.open_protocol_exclusive::<uefi::proto::console::pointer::SimplePointer>(pointer_handle) {
+                    if let Ok(Some(state)) = pointer.read_state() {
+                        input_received = true;
+                        
+                        let dx = state.relative_movement_x as isize;
+                        let dy = state.relative_movement_y as isize;
+                        
+                        if self.cursor_x == -1 {
+                            self.cursor_x = (self.screen_width / 2) as isize;
+                            self.cursor_y = (self.screen_height / 2) as isize;
+                        }
+                        
+                        self.cursor_x = (self.cursor_x + dx).clamp(0, self.screen_width as isize - 1);
+                        self.cursor_y = (self.cursor_y + dy).clamp(0, self.screen_height as isize - 1);
+                        
+                        if state.left_button {
+                            if !self.entries.is_empty() {
+                                self.running = false;
+                                return Some(self.entries[self.selected].clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !input_received {
                 system_table.boot_services().stall(10_000);
+                if timeout_ticks > 0 {
+                    ticks += 1;
+                    if ticks >= timeout_ticks {
+                        if self.default_entry < self.entries.len() {
+                            self.running = false;
+                            return Some(self.entries[self.default_entry].clone());
+                        }
+                    }
+                }
+            } else {
+                ticks = 0;
             }
         }
         
