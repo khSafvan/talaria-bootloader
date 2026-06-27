@@ -1,14 +1,14 @@
 # ============================================================================
-#  Visor boot manager configuration
-#  Location on the EFI System Partition (ESP):  \EFI\visor\boot.conf
+#  Talaria boot manager configuration
+#  Location on the EFI System Partition (ESP):  \EFI\talaria\boot.conf
 #
 #  Notes on paths:
 #    - All file paths are RELATIVE TO THE ROOT OF THE ESP and use back-slashes,
-#      e.g.  \EFI\visor\icons\arch.png
+#      e.g.  \EFI\talaria\icons\arch.png
 #    - Colors are hex in the form  #RRGGBB  (e.g. #7AA2F7).
 #    - Lines starting with '#' are comments. Whitespace around '=' is ignored.
 #    - Kernels/initrds on a non-FAT /boot (btrfs, ext4, ...) are unreadable by
-#      UEFI unless you drop an efifs driver into \EFI\visor\drivers\ - then the
+#      UEFI unless you drop an efifs driver into \EFI\talaria\drivers\ - then the
 #      path is relative to that filesystem's root, e.g. \boot\vmlinuz-...
 #      (see "Booting from non-FAT filesystems" in the README). A UKI on the ESP
 #      under \EFI\Linux\*.efi always works without a driver.
@@ -30,7 +30,7 @@ default=0
 quiet=0
 
 # 1 = use the plain text-console menu instead of the graphical one, even when a
-# graphics adapter is available. Visor ALSO falls back to this text menu
+# graphics adapter is available. Talaria ALSO falls back to this text menu
 # automatically if no Graphics Output Protocol is found, so set this only if you
 # prefer the text UI. 0 = graphical menu (default). (alias: text_mode)
 #text_menu=0
@@ -79,7 +79,7 @@ quiet=0
 #editor=1
 
 # Menu title shown at the top.
-#   (absent / empty) -> the default title "Visor"
+#   (absent / empty) -> the default title "Talaria"
 #   none             -> no title at all
 #   anything else    -> shown verbatim
 #title=My Rig
@@ -87,12 +87,12 @@ quiet=0
 # Text font. Currently only "jetbrains" is bundled. Empty = default.
 #font=jetbrains
 
-# Theme. If set, Visor loads \EFI\visor\themes\<name>.conf and the UI values in
+# Theme. If set, Talaria loads \EFI\talaria\themes\<name>.conf and the UI values in
 # that file OVERRIDE the ones below. A theme file may contain any of the UI keys
 # in this file (colors, sizes, icons, underline, power, background, title...).
 # Boot entries always stay here in boot.conf - themes are UI-only.
-#   <name>   load \EFI\visor\themes\<name>.conf
-#   random   pick a random theme from \EFI\visor\themes\ on each boot
+#   <name>   load \EFI\talaria\themes\<name>.conf
+#   random   pick a random theme from \EFI\talaria\themes\ on each boot
 #   cycle    advance to the next theme each boot (position saved in NVRAM)
 #theme=nord
 
@@ -170,13 +170,13 @@ quiet=0
 # set is fine. power_icon_size is the icon edge length in px (default 40).
 #power_icons=1
 #power_icon_size=44
-#shutdown_icon=\EFI\visor\icons\power_shutdown.png
-#reboot_icon=\EFI\visor\icons\power_reboot.png
-#firmware_icon=\EFI\visor\icons\power_firmware.png
+#shutdown_icon=\EFI\talaria\icons\power_shutdown.png
+#reboot_icon=\EFI\talaria\icons\power_reboot.png
+#firmware_icon=\EFI\talaria\icons\power_firmware.png
 
 # --- Background -------------------------------------------------------------
 # Full-screen background image (PNG, RGB or RGBA). Omit for a solid backdrop.
-background=\EFI\visor\backgrounds\default.png
+background=\EFI\talaria\backgrounds\default.png
 
 # ============================================================================
 #  Menu keys
@@ -206,7 +206,7 @@ background=\EFI\visor\backgrounds\default.png
 #    }
 #
 #  There is no longer a separate "linux"/"windows" block or a "type=" key:
-#  Visor auto-detects how to boot each entry from the image itself -
+#  Talaria auto-detects how to boot each entry from the image itself -
 #      * a PE image with no initrd/cmdline   -> chainloaded (e.g. Windows
 #        bootmgfw.efi); loaded by device path so its BCD is found
 #      * a PE image (UKI, or EFI-stub vmlinuz) -> LoadImage/StartImage, with
@@ -218,7 +218,7 @@ background=\EFI\visor\backgrounds\default.png
 #  "entry" (old configs keep working), but they no longer affect booting.
 #
 #  Auto-detection (used only when boot.conf is absent, or has no entries):
-#    Visor scans the ESP for kernels instead of guessing fixed paths -
+#    Talaria scans the ESP for kernels instead of guessing fixed paths -
 #      * \EFI\Linux\*.efi          Unified Kernel Images (each becomes an entry)
 #      * \boot\vmlinuz*, \vmlinuz* raw kernels (fallback if no UKIs found)
 #      * \EFI\Microsoft\Boot\bootmgfw.efi   Windows Boot Manager
@@ -230,7 +230,7 @@ background=\EFI\visor\backgrounds\default.png
 # For a plain stub kernel, supply initrd and cmdline as shown.
 #entry {
 #    name    = "Arch Linux"
-#    icon    = \EFI\visor\icons\arch.png
+#    icon    = \EFI\talaria\icons\arch.png
 #    color   = #1793D1
 #    kernel  = \vmlinuz-linux
 #    initrd  = \initramfs-linux.img
@@ -238,10 +238,10 @@ background=\EFI\visor\backgrounds\default.png
 }
 
 # Windows example - chainloads the Windows Boot Manager. "kernel" is the path
-# to bootmgfw.efi; Visor detects the PE image and loads it via its device path
+# to bootmgfw.efi; Talaria detects the PE image and loads it via its device path
 # so the BCD is found. No type= needed.
 #entry {
 #    name   = "Windows 11"
-#    icon   = \EFI\visor\icons\windows.png
+#    icon   = \EFI\talaria\icons\windows.png
 #   kernel = \EFI\Microsoft\Boot\bootmgfw.efi
 }

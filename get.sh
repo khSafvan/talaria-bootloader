@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-REPO="${VISOR_REPO:-https://github.com/IO-ZetZor/Visor-BootManager}"
-SRC="${VISOR_SRC:-${XDG_CACHE_HOME:-$HOME/.cache}/visor-src}"
+REPO="${TALARIA_REPO:-https://github.com/IO-ZetZor/talaria-bootloader}"
+SRC="${TALARIA_SRC:-${XDG_CACHE_HOME:-$HOME/.cache}/talaria-src}"
 
 say()  { printf '\033[1;34m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
@@ -32,8 +32,8 @@ need_deps() {
     return 1
 }
 
-say "Visor installer"
-[ "$(uname -s)" = Linux ] || die "This installer is for Linux. (Visor itself runs in UEFI firmware.)"
+say "Talaria installer"
+[ "$(uname -s)" = Linux ] || die "This installer is for Linux. (Talaria itself runs in UEFI firmware.)"
 
 if need_deps; then
     install_deps
@@ -45,7 +45,7 @@ if [ -d "$SRC/.git" ]; then
     say "Updating existing source in $SRC"
     git -C "$SRC" pull --ff-only || die "Could not update $SRC - delete it and retry."
 else
-    say "Downloading Visor into $SRC"
+    say "Downloading Talaria into $SRC"
     mkdir -p "$(dirname "$SRC")"
     git clone --depth 1 "$REPO" "$SRC" || die "git clone failed."
 fi
@@ -62,4 +62,4 @@ else
     ./install.sh "$@"
 fi
 
-say "Done. You can re-run 'visor update' anytime to grab the latest version."
+say "Done. You can re-run 'talaria update' anytime to grab the latest version."

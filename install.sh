@@ -13,9 +13,10 @@ FS_DRIVER=""
 INSTALL_CLI=1
 CLI_DIR="${CLI_DIR:-/usr/local/bin}"
 
-VISOR_DIR_REL="EFI/visor"
-EFI_NAME="visor_x64.efi"
-CLI_NAME="visor"
+TALARIA_DIR_REL="EFI/talaria"
+EFI_NAME="talaria_x64.efi"
+EFI_SRC="target/x86_64-unknown-uefi/release/talaria-bootloader.efi"
+CLI_NAME="talaria"
 
 say()  { printf '\033[1;34m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
@@ -23,18 +24,18 @@ die()  { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<'EOF'
-install.sh - install Visor to the EFI System Partition (ESP)
+install.sh - install Talaria to the EFI System Partition (ESP)
 
 Usage: ./install.sh [options]
 
   --esp PATH         ESP mount point (auto-detected if omitted)
-  --no-build         skip 'make'; install the existing visor_x64.efi
+  --no-build         skip 'make'; install the existing talaria_x64.efi
   --boot-entry       add a UEFI boot entry via efibootmgr (else prompted)
   --no-boot-entry    do not add or prompt for a UEFI boot entry
-  --sign             sign Visor for Secure Boot via sbctl (else prompted)
+  --sign             sign Talaria for Secure Boot via sbctl (else prompted)
   --no-sign          do not sign or prompt for Secure Boot signing
-  --fs-driver PATH   copy an EFI filesystem driver into \EFI\visor\drivers
-  --no-cli           do not install the host-side 'visor' command
+  --fs-driver PATH   copy an EFI filesystem driver into \EFI\talaria\drivers
+  --no-cli           do not install the host-side 'talaria' command
   --cli-dir PATH     directory for the host-side command (default: /usr/local/bin)
   --force-config     overwrite an existing boot.conf with the default
   -h, --help         show this help
@@ -105,31 +106,38 @@ fi
 [ -d "$ESP" ] || die "ESP path does not exist: $ESP"
 say "Using ESP: $ESP"
 
-DEST="$ESP/$VISOR_DIR_REL"
+DEST="$ESP/$TALARIA_DIR_REL"
+
+if [ "$EUID" -ne 0 ]; then
+    die "This script requires root privileges to mount the ESP and sign files. Re-run with sudo."
+fi
 
 if [ "$DO_BUILD" -eq 1 ]; then
-    say "Building $EFI_NAME ..."
-    rm -f "$EFI_NAME"
-    if ! make --no-print-directory; then
-        die "Build failed - not installing. Fix the errors above (see README 'Requirements')."
+    say "Installing UEFI Rust target if missing..."
+    if command -v rustup >/dev/null 2>&1; then
+        if ! rustup target list | grep -q "x86_64-unknown-uefi (installed)"; then
+            rustup component add rust-src --toolchain nightly || true
+            rustup target add x86_64-unknown-uefi --toolchain nightly || true
+        fi
     fi
-    [ -f "$EFI_NAME" ] || die "Build reported success but $EFI_NAME is missing - aborting."
-fi
-[ -f "$EFI_NAME" ] || die "$EFI_NAME not found - build first or drop --no-build."
 
-if command -v objdump >/dev/null 2>&1; then
-    if ! objdump -h "$EFI_NAME" 2>/dev/null | grep -q '\.text'; then
-        die "$EFI_NAME looks malformed (no .text section) - refusing to install."
+    say "Building $EFI_NAME via Cargo..."
+    if ! cargo build --target x86_64-unknown-uefi --release; then
+        die "Build failed - not installing. Fix the errors above."
     fi
+    [ -f "$EFI_SRC" ] || die "Build reported success but $EFI_SRC is missing - aborting."
 fi
+[ -f "$EFI_SRC" ] || die "$EFI_SRC not found - build first or drop --no-build."
 
-if [ ! -w "$ESP" ]; then
-    die "No write permission on $ESP. Re-run with sudo."
+if head -c 2 "$EFI_SRC" | grep -q 'MZ'; then
+    say "EFI binary is valid (MZ header found)."
+else
+    die "$EFI_SRC looks malformed (no MZ header) - refusing to install."
 fi
 
 say "Installing into $DEST"
 mkdir -p "$DEST/icons" "$DEST/backgrounds"
-install -m 0644 "$EFI_NAME" "$DEST/$EFI_NAME"
+install -m 0644 "$EFI_SRC" "$DEST/$EFI_NAME"
 
 if [ -d assets/icons ]; then
     cp -f assets/icons/*.png "$DEST/icons/" 2>/dev/null || true
@@ -163,7 +171,7 @@ if [ -n "$FS_DRIVER" ]; then
     say "Installed filesystem driver: $DRIVER_DEST"
 fi
 
-[ "$DO_BOOT_ENTRY" -eq -1 ] && DO_BOOT_ENTRY="$(ask 'Add a UEFI boot entry for Visor with efibootmgr?')"
+[ "$DO_BOOT_ENTRY" -eq -1 ] && DO_BOOT_ENTRY="$(ask 'Add a UEFI boot entry for Talaria with efibootmgr?')"
 if [ "$DO_BOOT_ENTRY" -eq 1 ]; then
     if ! command -v efibootmgr >/dev/null 2>&1; then
         warn "efibootmgr not installed; skipping boot entry."
@@ -174,18 +182,18 @@ if [ "$DO_BOOT_ENTRY" -eq 1 ]; then
                    echo "$src" | grep -o '[0-9]*$')"
         if [ ! -b "$disk" ]; then
             warn "Could not determine ESP disk (got '$disk'); skipping boot entry."
-        elif efibootmgr | grep -q 'Visor'; then
-            say "A 'Visor' boot entry already exists; leaving it untouched."
+        elif efibootmgr | grep -q 'Talaria'; then
+            say "A 'Talaria' boot entry already exists; leaving it untouched."
         else
-            loader="\\${VISOR_DIR_REL//\//\\}\\$EFI_NAME"
-            say "Creating UEFI boot entry 'Visor' -> $disk part $partnum"
+            loader="\\${TALARIA_DIR_REL//\//\\}\\$EFI_NAME"
+            say "Creating UEFI boot entry 'Talaria' -> $disk part $partnum"
             efibootmgr --create --disk "$disk" --part "$partnum" \
-                       --label "Visor" --loader "$loader" >/dev/null
+                       --label "Talaria" --loader "$loader" >/dev/null
         fi
     fi
 fi
 
-[ "$DO_SIGN" -eq -1 ] && DO_SIGN="$(ask 'Sign Visor for Secure Boot with sbctl?')"
+[ "$DO_SIGN" -eq -1 ] && DO_SIGN="$(ask 'Sign Talaria for Secure Boot with sbctl?')"
 if [ "$DO_SIGN" -eq 1 ]; then
     if ! command -v sbctl >/dev/null 2>&1; then
         warn "sbctl not installed; skipping signing."
@@ -199,4 +207,4 @@ if [ "$DO_SIGN" -eq 1 ]; then
     fi
 fi
 
-say "Done. Visor is installed at $DEST"
+say "Done. Talaria is installed at $DEST"
