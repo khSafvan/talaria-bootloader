@@ -21,6 +21,16 @@ pub fn boot_windows(image_handle: Handle, system_table: &mut SystemTable<Boot>, 
         None => return Status::NOT_FOUND,
     };
     
+    if entry.has_sha256 {
+        if !crate::crypto::verify_hash(&buffer, &entry.sha256) {
+            return Status::SECURITY_VIOLATION;
+        }
+    }
+    
+    if let Err(e) = crate::crypto::verify_secure_boot(system_table, &buffer) {
+        return e;
+    }
+    
     let bs = system_table.boot_services();
     let loaded_image_handle = match bs.load_image(image_handle, LoadImageSource::FromBuffer { buffer: &buffer, file_path: None }) {
         Ok(h) => h,
@@ -44,6 +54,16 @@ pub fn boot_linux(image_handle: Handle, system_table: &mut SystemTable<Boot>, en
         Some(b) => b,
         None => return Status::NOT_FOUND,
     };
+    
+    if entry.has_sha256 {
+        if !crate::crypto::verify_hash(&buffer, &entry.sha256) {
+            return Status::SECURITY_VIOLATION;
+        }
+    }
+    
+    if let Err(e) = crate::crypto::verify_secure_boot(system_table, &buffer) {
+        return e;
+    }
     
     let bs = system_table.boot_services();
     let loaded_image_handle = match bs.load_image(image_handle, LoadImageSource::FromBuffer { buffer: &buffer, file_path: None }) {
