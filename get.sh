@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-REPO="${TALARIA_REPO:-https://github.com/IO-ZetZor/talaria-bootloader}"
+REPO="${TALARIA_REPO:-https://github.com/zack/talaria-bootloader}"
 SRC="${TALARIA_SRC:-${XDG_CACHE_HOME:-$HOME/.cache}/talaria-src}"
 
 say()  { printf '\033[1;34m::\033[0m %s\n' "$*"; }
