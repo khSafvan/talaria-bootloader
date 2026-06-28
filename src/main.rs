@@ -21,7 +21,7 @@ fn main() -> Status {
     
     info!("talaria-bootloader (Rust) loading...");
 
-    let config_path = "\\talaria\\boot.conf";
+    let config_path = "\\EFI\\talaria\\boot.conf";
     let config_content = efi_helpers::read_file_to_string(image_handle, config_path);
     let mut config = config::Config::default();
     
@@ -33,36 +33,52 @@ fn main() -> Status {
     
     if config.entries.is_empty() {
         log::info!("No boot entries found, generating auto-detect menu...");
-        config.entries.push(gui::BootEntry {
-            name: alloc::string::String::from("Windows Boot Manager"),
-            icon_path: None,
-            kernel_path: Some(alloc::string::String::from("\\EFI\\Microsoft\\Boot\\bootmgfw.efi")),
-            initrd_path: None,
-            cmdline: None,
-            uuid: None,
-            index: 0,
-            entry_type: 0,
-            icon_size: 64,
-            color: gui::COLOR_BLUE,
-            has_color: true,
-            sha256: [0; 32],
-            has_sha256: false,
-        });
-        config.entries.push(gui::BootEntry {
-            name: alloc::string::String::from("Linux (Auto)"),
-            icon_path: None,
-            kernel_path: Some(alloc::string::String::from("\\EFI\\Linux\\BOOTX64.EFI")),
-            initrd_path: None,
-            cmdline: None,
-            uuid: None,
-            index: 1,
-            entry_type: 0,
-            icon_size: 64,
-            color: gui::COLOR_WHITE,
-            has_color: true,
-            sha256: [0; 32],
-            has_sha256: false,
-        });
+        
+        let mut idx = 0;
+        let mut add_entry = |name: &str, path: &str, color: gui::Color| {
+            config.entries.push(gui::BootEntry {
+                name: alloc::string::String::from(name),
+                icon_path: None,
+                icon_data: None,
+                kernel_path: Some(alloc::string::String::from(path)),
+                initrd_path: None,
+                cmdline: None,
+                uuid: None,
+                index: idx,
+                entry_type: 0,
+                icon_size: 64,
+                color,
+                has_color: true,
+                sha256: [0; 32],
+                has_sha256: false,
+            });
+            idx += 1;
+        };
+
+        if efi_helpers::read_file_bytes(image_handle, "\\EFI\\Microsoft\\Boot\\bootmgfw.efi").is_some() {
+            add_entry("Windows Boot Manager", "\\EFI\\Microsoft\\Boot\\bootmgfw.efi", gui::COLOR_BLUE);
+        }
+
+        if let Some(files) = efi_helpers::scan_directory(image_handle, "\\EFI\\Linux") {
+            for f in files {
+                let lower = f.to_lowercase();
+                if lower.ends_with(".efi") {
+                    let path = alloc::format!("\\EFI\\Linux\\{}", f);
+                    let name = f.trim_end_matches(".efi").trim_end_matches(".EFI");
+                    add_entry(name, &path, gui::COLOR_GREEN);
+                }
+            }
+        }
+        
+        if let Some(files) = efi_helpers::scan_directory(image_handle, "\\boot") {
+            for f in files {
+                let lower = f.to_lowercase();
+                if lower.starts_with("vmlinuz") {
+                    let path = alloc::format!("\\boot\\{}", f);
+                    add_entry(&f, &path, gui::COLOR_ORANGE);
+                }
+            }
+        }
     }
     
     let mut selected_entry = None;
@@ -76,6 +92,22 @@ fn main() -> Status {
     
     let use_gui = !config.text_menu && gop.is_some();
     if use_gui {
+        // Load icons and background image before starting the GUI
+        for entry in &mut config.entries {
+            if let Some(path) = &entry.icon_path {
+                if let Some(bytes) = efi_helpers::read_file_bytes(image_handle, path) {
+                    entry.icon_data = gui::parse_bmp(&bytes);
+                }
+            }
+        }
+        
+        let mut bg_image = None;
+        if let Some(bg_path) = &config.background {
+            if let Some(bytes) = efi_helpers::read_file_bytes(image_handle, bg_path) {
+                bg_image = gui::parse_bmp(&bytes);
+            }
+        }
+        
         let mut gop_proto = gop.unwrap();
         let mut gui = gui::GuiState {
             gop: Some(&mut *gop_proto),
@@ -83,6 +115,7 @@ fn main() -> Status {
             entries: config.entries.clone(),
             timeout: config.timeout,
             default_entry: config.default_entry,
+            bg_image,
             ..gui::GuiState::new()
         };
         let _ = gui.init();

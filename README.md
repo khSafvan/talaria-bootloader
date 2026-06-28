@@ -1,14 +1,12 @@
-# Talaria (Rust Fork)
+# Talaria
 
-A minimal, fast, modern, graphical UEFI boot manager — now completely rewritten in memory-safe **Rust**!
-
-> **Note**: This repository is a Rust fork of the original Visor-BootManager project by IO-ZetZor. All legacy C code has been completely replaced with a native `#![no_std]` Rust implementation.
+A minimal, fast, modern, graphical UEFI boot manager written entirely in memory-safe **Rust** (`#![no_std]`).
 
 Talaria draws an icon-based boot menu capable of booting **Linux** (EFI stub kernels / Unified Kernel Images) or chainloading other EFI executables (including Windows Boot Manager) with no external dependencies.
 
 ## ⚠️ Development Status & Testing
 
-> **Warning:** This project is highly experimental. It was rapidly vibe coded as a Rust fork via AI paired programming to replace the original C codebase with a modern, memory-safe architecture.
+> **Warning:** This project is highly experimental. It was rapidly vibe coded via AI pair programming to build a modern, memory-safe boot manager from scratch.
 >
 > While the codebase has been strictly linted and boots successfully inside QEMU emulators, **it has not yet been tested on real, bare-metal hardware.** Expect bugs and proceed with caution.
 
