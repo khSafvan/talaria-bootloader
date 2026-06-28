@@ -74,7 +74,9 @@ fn main() -> Status {
     let pointer_handle = uefi::boot::get_handle_for_protocol::<uefi::proto::console::pointer::Pointer>();
     let pointer = pointer_handle.ok().and_then(|h| uefi::boot::open_protocol_exclusive::<uefi::proto::console::pointer::Pointer>(h).ok());
     
-    if let Some(mut gop_proto) = gop {
+    let use_gui = !config.text_menu && gop.is_some();
+    if use_gui {
+        let mut gop_proto = gop.unwrap();
         let mut gui = gui::GuiState {
             gop: Some(&mut *gop_proto),
             pointer: pointer,
@@ -104,7 +106,16 @@ fn main() -> Status {
                       | uefi::runtime::VariableAttributes::BOOTSERVICE_ACCESS 
                       | uefi::runtime::VariableAttributes::RUNTIME_ACCESS;
             let name = uefi::CString16::try_from("OsIndications").unwrap();
-            let _ = uefi::runtime::set_variable(&name, &uefi::runtime::VariableVendor::GLOBAL_VARIABLE, flags, &1u64.to_le_bytes());
+            let mut value: u64 = 1;
+            let mut data = [0u8; 8];
+            if let Ok((var_data, _)) = uefi::runtime::get_variable(&name, &uefi::runtime::VariableVendor::GLOBAL_VARIABLE, &mut data) {
+                if var_data.len() == 8 {
+                    let mut arr = [0u8; 8];
+                    arr.copy_from_slice(var_data);
+                    value = u64::from_le_bytes(arr) | 1;
+                }
+            }
+            let _ = uefi::runtime::set_variable(&name, &uefi::runtime::VariableVendor::GLOBAL_VARIABLE, flags, &value.to_le_bytes());
             uefi::runtime::reset(uefi::runtime::ResetType::COLD, Status::SUCCESS, None);
         }
         _ => {}

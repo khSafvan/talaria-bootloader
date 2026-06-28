@@ -141,10 +141,15 @@ impl<'boot> GuiState<'boot> {
     }
 
     pub fn fill_rect(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
+        if x >= self.screen_width || y >= self.screen_height {
+            return;
+        }
+        
         if let Some(buf) = &mut self.backbuffer {
             let pixel = BltPixel::new(color.r, color.g, color.b);
-            let ex = (x + w).min(self.screen_width);
-            let ey = (y + h).min(self.screen_height);
+            
+            let ex = x.saturating_add(w).min(self.screen_width);
+            let ey = y.saturating_add(h).min(self.screen_height);
             
             for j in y..ey {
                 let start = j * self.screen_width + x;
@@ -220,7 +225,7 @@ impl<'boot> GuiState<'boot> {
     pub fn run(&mut self) -> Option<BootEntry> {
         self.running = true;
         let mut ticks: isize = 0;
-        let timeout_ticks = self.timeout * 100;
+        let mut timeout_ticks = self.timeout * 100;
         
         while self.running {
             if self.dirty {
@@ -272,10 +277,7 @@ impl<'boot> GuiState<'boot> {
                     }
                     uefi::proto::console::text::Key::Special(uefi::proto::console::text::ScanCode::ESCAPE) => {
                         self.running = false;
-                        let safe_default = if self.default_entry < self.entries.len() { self.default_entry } else { 0 };
-                        if !self.entries.is_empty() {
-                            return Some(self.entries[safe_default].clone());
-                        }
+                        return None;
                     }
                     _ => {}
                 }
@@ -311,17 +313,17 @@ impl<'boot> GuiState<'boot> {
             }
 
             if !input_received {
-                if timeout_ticks > 0 {
-                    ticks += 1;
+                if timeout_ticks >= 0 {
                     if ticks >= timeout_ticks {
-                        if self.default_entry < self.entries.len() {
+                        if !self.entries.is_empty() {
                             self.running = false;
-                            return Some(self.entries[self.default_entry].clone());
+                            return Some(self.entries[self.selected].clone());
                         }
                     }
+                    ticks += 1;
                 }
             } else {
-                ticks = 0;
+                timeout_ticks = -1; // Abort timeout on input
             }
             
             // Frame-rate limiter: unconditionally wait 10ms to prevent PCIe bus saturation when input is active

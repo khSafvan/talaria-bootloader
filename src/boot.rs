@@ -3,7 +3,7 @@
 use uefi::prelude::*;
 use crate::gui::BootEntry;
 
-use alloc::string::String;
+
 use alloc::vec::Vec;
 use uefi::proto::device_path::DevicePath;
 use uefi::proto::loaded_image::LoadedImage;
@@ -44,7 +44,10 @@ pub fn boot_windows(image_handle: Handle, entry: &BootEntry) -> Status {
     drop(device_path_protocol);
     match uefi::boot::start_image(loaded_image_handle) {
         Ok(_) => Status::SUCCESS,
-        Err(e) => e.status(),
+        Err(e) => {
+            let _ = uefi::boot::unload_image(loaded_image_handle);
+            e.status()
+        }
     }
 }
 
@@ -90,9 +93,10 @@ pub fn boot_linux(image_handle: Handle, entry: &BootEntry) -> Status {
             final_cmdline.push(' ');
         }
         final_cmdline.push_str("initrd=");
-        final_cmdline.push_str(initrd);
+        final_cmdline.push_str(&initrd.replace('/', "\\"));
     }
     
+    let mut cmdline_ptr: Option<core::ptr::NonNull<u8>> = None;
     if !final_cmdline.is_empty() {
         if let Ok(mut loaded_image) = uefi::boot::open_protocol_exclusive::<LoadedImage>(loaded_image_handle) {
             let cmdline_utf16: Vec<u16> = final_cmdline.encode_utf16().chain(core::iter::once(0)).collect();
@@ -103,6 +107,7 @@ pub fn boot_linux(image_handle: Handle, entry: &BootEntry) -> Status {
                     core::ptr::copy_nonoverlapping(cmdline_utf16.as_ptr() as *const u8, ptr.as_ptr(), size);
                     loaded_image.set_load_options(ptr.as_ptr(), size as u32);
                 }
+                cmdline_ptr = Some(ptr);
             }
         }
     }
@@ -110,6 +115,14 @@ pub fn boot_linux(image_handle: Handle, entry: &BootEntry) -> Status {
     drop(device_path_protocol);
     match uefi::boot::start_image(loaded_image_handle) {
         Ok(_) => Status::SUCCESS,
-        Err(e) => e.status(),
+        Err(e) => {
+            if let Some(ptr) = cmdline_ptr {
+                unsafe {
+                    let _ = uefi::boot::free_pool(ptr);
+                }
+            }
+            let _ = uefi::boot::unload_image(loaded_image_handle);
+            e.status()
+        }
     }
 }

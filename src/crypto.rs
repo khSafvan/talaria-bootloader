@@ -16,7 +16,7 @@ pub fn verify_hash(data: &[u8], expected: &[u8; 32]) -> bool {
     actual == *expected
 }
 
-use uefi::prelude::*;
+
 
 #[repr(C)]
 #[uefi_macros::unsafe_protocol("605dab50-e046-4300-abb6-3dd810dd8b23")]
@@ -32,7 +32,7 @@ pub fn verify_secure_boot(buffer: &[u8]) -> Result<(), uefi::Status> {
     
     let shim = match uefi::boot::open_protocol_exclusive::<ShimLock>(shim_handle) {
         Ok(s) => s,
-        Err(_) => return Ok(()),
+        Err(e) => return Err(e.status()),
     };
     
     let status = (shim.verify)(buffer.as_ptr(), buffer.len() as u32);
