@@ -1,1 +1,27 @@
-/target
+# Rust/Cargo
+/target/
+**/*.rs.bk
+
+# Bootloader Mock Environment
+/esp/
+*.efi
+*.iso
+*.img
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.nvim_log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.log
