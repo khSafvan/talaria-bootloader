@@ -6,9 +6,9 @@ Talaria draws an icon-based boot menu capable of booting **Linux** (EFI stub ker
 
 ## ⚠️ Development Status & Testing
 
-> **Warning:** This project is highly experimental. It was rapidly vibe coded via AI pair programming to build a modern, memory-safe boot manager from scratch.
+> **Note:** This project began as a rapidly vibe-coded AI pair programming experiment to build a modern, memory-safe boot manager from scratch. 
 >
-> While the codebase has been strictly linted and boots successfully inside QEMU emulators, **it has not yet been tested on real, bare-metal hardware.** Expect bugs and proceed with caution.
+> While the codebase has undergone a rigorous audit and boots successfully inside QEMU emulators, **it has not yet been tested on real, bare-metal hardware.** Expect bugs and proceed with caution.
 
 **Current Testing Status:**
 
@@ -23,7 +23,9 @@ Talaria draws an icon-based boot menu capable of booting **Linux** (EFI stub ker
 
 ## Features (Rust Port)
 
-- **Graphical Menu** — simple rendering via the UEFI Graphics Output Protocol (GOP).
+- **Graphical Menu** — modern rendering via the UEFI Graphics Output Protocol (GOP) with a custom zero-allocation rendering engine.
+- **True 32-bit ARGB Blending** — seamless, alpha-blended UI components and OS distro icons (BMP) against custom backgrounds.
+- **Zero-Flicker Instant Boot** — fully silent and immediate OS handoff when `timeout=0` is configured.
 - **Auto-detection** — scans for common Linux and Windows loaders and builds a menu automatically if no config is found.
 - **Secure Boot aware** — verifies images through shim's `SHIM_LOCK` protocol when present.
 
@@ -98,3 +100,7 @@ entry {
 | `Left`/`Right` | Move between boot entries (wraps) |
 | `Enter`        | Boot the focused entry            |
 | `Esc`          | Boot the default entry            |
+
+## Credits
+
+This repository is a Rust fork of the original [Visor-BootManager](https://github.com/IO-ZetZor/Visor-BootManager) project by **IO-ZetZor**. The original project provided the inspiration and architectural foundation for this UEFI boot manager.

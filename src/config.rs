@@ -250,6 +250,20 @@ impl<'a> Config<'a> {
                                 config.title_color = c;
                             }
                         }
+                        "background" => {
+                            config.background = Some(value);
+                        }
+                        "theme" => config.theme = Some(value),
+                        "title" => config.title = Some(value),
+                        "font" => config.font = Some(value),
+                        "text_menu" => {
+                            config.text_menu = value == "1" || value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("yes");
+                        }
+                        "icon_size" => {
+                            if let Ok(v) = value.parse::<usize>() {
+                                config.icon_size = v;
+                            }
+                        }
                         "highlight_color" => {
                             if let Some(c) = parse_color(value) { config.highlight_color = c; }
                         }

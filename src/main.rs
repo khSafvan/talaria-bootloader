@@ -10,7 +10,6 @@ pub mod efi_helpers;
 pub mod crypto;
 pub mod text_menu;
 pub mod font;
-pub mod font_jetbrains;
 
 use log::info;
 use uefi::prelude::*;
@@ -55,7 +54,7 @@ fn main() -> Status {
             idx += 1;
         };
 
-        if efi_helpers::read_file_bytes(image_handle, "\\EFI\\Microsoft\\Boot\\bootmgfw.efi").is_some() {
+        if efi_helpers::file_exists(image_handle, "\\EFI\\Microsoft\\Boot\\bootmgfw.efi") {
             add_entry("Windows Boot Manager", "\\EFI\\Microsoft\\Boot\\bootmgfw.efi", gui::COLOR_BLUE);
         }
 
@@ -64,7 +63,7 @@ fn main() -> Status {
                 let lower = f.to_lowercase();
                 if lower.ends_with(".efi") {
                     let path = alloc::format!("\\EFI\\Linux\\{}", f);
-                    let name = f.trim_end_matches(".efi").trim_end_matches(".EFI");
+                    let name = &f[..f.len() - 4];
                     add_entry(name, &path, gui::COLOR_GREEN);
                 }
             }
@@ -90,40 +89,49 @@ fn main() -> Status {
     let pointer_handle = uefi::boot::get_handle_for_protocol::<uefi::proto::console::pointer::Pointer>();
     let pointer = pointer_handle.ok().and_then(|h| uefi::boot::open_protocol_exclusive::<uefi::proto::console::pointer::Pointer>(h).ok());
     
-    let use_gui = !config.text_menu && gop.is_some();
-    if use_gui {
-        // Load icons and background image before starting the GUI
-        for entry in &mut config.entries {
-            if let Some(path) = &entry.icon_path {
-                if let Some(bytes) = efi_helpers::read_file_bytes(image_handle, path) {
-                    entry.icon_data = gui::parse_bmp(&bytes);
+    if config.timeout == 0 && !config.entries.is_empty() {
+        let default = if config.default_entry < config.entries.len() { config.default_entry } else { 0 };
+        selected_entry = Some(config.entries[default].clone());
+    } else {
+        let use_gui = !config.text_menu && gop.is_some();
+        if use_gui {
+            // Load icons and background image before starting the GUI
+            for entry in config.entries.iter_mut() {
+                if let Some(path) = &entry.icon_path
+                    && let Some(bytes) = efi_helpers::read_file_bytes(image_handle, path) {
+                        entry.icon_data = gui::parse_bmp(&bytes);
                 }
             }
-        }
-        
-        let mut bg_image = None;
-        if let Some(bg_path) = &config.background {
-            if let Some(bytes) = efi_helpers::read_file_bytes(image_handle, bg_path) {
-                bg_image = gui::parse_bmp(&bytes);
+            
+            let mut bg_image = None;
+            if let Some(bg_path) = &config.background
+                && let Some(bytes) = efi_helpers::read_file_bytes(image_handle, bg_path) {
+                    bg_image = gui::parse_bmp(&bytes);
             }
-        }
-        
-        let mut gop_proto = gop.unwrap();
-        let mut gui = gui::GuiState {
-            gop: Some(&mut *gop_proto),
-            pointer,
-            entries: config.entries.clone(),
-            timeout: config.timeout,
-            default_entry: config.default_entry,
-            bg_image,
-            ..gui::GuiState::new()
-        };
-        let _ = gui.init();
-        selected_entry = gui.run();
-        selected_action = gui.action;
-    } else {
-        if let Some(idx) = text_menu::show_text_menu(&config.entries, config.timeout, config.default_entry) {
-            selected_entry = Some(config.entries[idx].clone());
+            
+            let mut gop_proto = gop.unwrap();
+            let mut gui = gui::GuiState {
+                gop: Some(&mut *gop_proto),
+                pointer,
+                entries: config.entries.clone(),
+                timeout: config.timeout,
+                default_entry: config.default_entry,
+                bg_image,
+                bg_color: config.bg_color,
+                highlight_color: config.highlight_color,
+                name_color: config.name_color,
+                title_color: config.title_color,
+                show_names: config.show_names,
+                title: config.title.map(alloc::string::String::from),
+                ..gui::GuiState::new()
+            };
+            let _ = gui.init();
+            selected_entry = gui.run();
+            selected_action = gui.action;
+        } else {
+            if let Some(idx) = text_menu::show_text_menu(&config.entries, config.timeout, config.default_entry) {
+                selected_entry = Some(config.entries[idx].clone());
+            }
         }
     }
     

@@ -27,7 +27,15 @@ pub fn show_text_menu(entries: &[BootEntry], timeout: isize, default_entry: usiz
         if dirty {
             uefi::system::with_stdout(|stdout| {
                 let _ = stdout.clear();
-                let _ = write!(stdout, "Talaria Boot Menu\n\n");
+                let seconds_left = if timeout_ticks >= 0 {
+                    (timeout_ticks - ticks + 9) / 10
+                } else { 0 };
+                
+                if seconds_left > 0 {
+                    let _ = write!(stdout, "Talaria Boot Menu (Booting default in {}s)\n\n", seconds_left);
+                } else {
+                    let _ = write!(stdout, "Talaria Boot Menu\n\n");
+                }
                 
                 for (i, entry) in entries.iter().enumerate() {
                     if i == selected {
@@ -72,6 +80,10 @@ pub fn show_text_menu(entries: &[BootEntry], timeout: isize, default_entry: usiz
                     return Some(selected);
                 }
                 ticks += 1;
+                // Update UI every second (10 ticks = 1s)
+                if ticks % 10 == 0 {
+                    dirty = true;
+                }
             }
         }
         
