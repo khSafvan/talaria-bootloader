@@ -8,11 +8,12 @@ Talaria draws an icon-based boot menu capable of booting **Linux** (EFI stub ker
 
 ## ⚠️ Development Status & Testing
 
-> **Warning:** This project is highly experimental. It was rapidly vibe coded as a Rust fork via AI paired programming to replace the original C codebase with a modern, memory-safe architecture. 
-> 
+> **Warning:** This project is highly experimental. It was rapidly vibe coded as a Rust fork via AI paired programming to replace the original C codebase with a modern, memory-safe architecture.
+>
 > While the codebase has been strictly linted and boots successfully inside QEMU emulators, **it has not yet been tested on real, bare-metal hardware.** Expect bugs and proceed with caution.
 
 **Current Testing Status:**
+
 - [x] Rust `no_std` UEFI compilation pipeline (`x86_64-unknown-uefi`)
 - [x] Automated QEMU / VirtualBox disk image creation (`build_vdi.sh`)
 - [x] UEFI GOP graphical buffer initialization
@@ -80,10 +81,10 @@ Talaria auto-detects how to boot each one from the image itself.
 
 ```conf
 entry {
-    name    = "Arch Linux"      
-    kernel  = \vmlinuz-linux    
-    initrd  = \initramfs-linux.img        
-    cmdline = "root=PARTUUID=... rw quiet" 
+    name    = "Arch Linux"
+    kernel  = \vmlinuz-linux
+    initrd  = \initramfs-linux.img
+    cmdline = "root=PARTUUID=... rw quiet"
 }
 
 entry {
@@ -94,22 +95,8 @@ entry {
 
 ## Controls
 
-| Key            | Action                                                               |
-|----------------|----------------------------------------------------------------------|
-| `Left`/`Right` | Move between boot entries (wraps)                                    |
-| `Enter`        | Boot the focused entry                                             |
-| `Esc`          | Boot the default entry                                               |
-
----
-
-MASSIVELY INSPIRED BY rEFInd!!
-
----
-
-### Donations (For Indian supporters)
-
-If you like what i'm doing, and want to support me on this project and others that WILL be coming soon, It'll be greatly appreciated :)
-
-UPI ID : 'zetzor.anand@fam'
-
-![QR](assets/donate-qr.png)
+| Key            | Action                            |
+| -------------- | --------------------------------- |
+| `Left`/`Right` | Move between boot entries (wraps) |
+| `Enter`        | Boot the focused entry            |
+| `Esc`          | Boot the default entry            |
