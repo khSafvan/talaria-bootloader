@@ -33,7 +33,9 @@ pub fn file_exists(image_handle: Handle, path: &str) -> bool {
             let path_str = path.replace('/', "\\");
             let path_str = path_str.trim_start_matches('\\');
             if let Ok(path_16) = uefi::CString16::try_from(path_str) {
-                return root.open(&path_16, FileMode::Read, FileAttribute::empty()).is_ok();
+                if let Ok(file_handle) = root.open(&path_16, FileMode::Read, FileAttribute::empty()) {
+                    return file_handle.into_regular_file().is_some();
+                }
             }
     }
     false

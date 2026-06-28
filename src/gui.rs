@@ -99,7 +99,7 @@ pub struct BootEntry {
 
 pub struct GuiState<'boot> {
     pub gop: Option<&'boot mut uefi::proto::console::gop::GraphicsOutput>,
-    pub pointer: Option<uefi::boot::ScopedProtocol<uefi::proto::console::pointer::Pointer>>,
+    pub pointers: Vec<uefi::boot::ScopedProtocol<uefi::proto::console::pointer::Pointer>>,
     
     pub screen_width: usize,
     pub screen_height: usize,
@@ -144,7 +144,7 @@ impl<'boot> GuiState<'boot> {
     pub fn new() -> Self {
         Self {
             gop: None,
-            pointer: None,
+            pointers: Vec::new(),
             screen_width: 0,
             screen_height: 0,
             bpp: 4,
@@ -495,12 +495,24 @@ impl<'boot> GuiState<'boot> {
                 }
             }
             
-            if let Some(pointer) = &mut self.pointer 
-                && let Ok(Some(state)) = pointer.read_state() {
+            let mut any_dx = 0;
+            let mut any_dy = 0;
+            let mut any_btn = false;
+            
+            for pointer in &mut self.pointers {
+                if let Ok(Some(state)) = pointer.read_state() {
                     input_received = true;
-                    
-                    let dx = state.relative_movement[0] as isize;
-                    let dy = state.relative_movement[1] as isize;
+                    any_dx += state.relative_movement[0] as isize;
+                    any_dy += state.relative_movement[1] as isize;
+                    if state.button[0] {
+                        any_btn = true;
+                    }
+                }
+            }
+            
+            if input_received && (any_dx != 0 || any_dy != 0 || any_btn) {
+                    let dx = any_dx;
+                    let dy = any_dy;
                     
                     if self.cursor_x == -1 {
                         self.cursor_x = (self.screen_width / 2) as isize;
@@ -515,7 +527,7 @@ impl<'boot> GuiState<'boot> {
                         self.dirty = true;
                     }
                     
-                    if state.button[0] {
+                    if any_btn {
                         let cx = self.cursor_x as usize;
                         let cy = self.cursor_y as usize;
                         
