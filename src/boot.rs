@@ -21,10 +21,8 @@ pub fn boot_windows(image_handle: Handle, entry: &BootEntry) -> Status {
         None => return Status::NOT_FOUND,
     };
     
-    if entry.has_sha256 {
-        if !crate::crypto::verify_hash(&buffer, &entry.sha256) {
-            return Status::SECURITY_VIOLATION;
-        }
+    if entry.has_sha256 && !crate::crypto::verify_hash(&buffer, &entry.sha256) {
+        return Status::SECURITY_VIOLATION;
     }
     
     if let Err(e) = crate::crypto::verify_secure_boot(&buffer) {
@@ -42,13 +40,12 @@ pub fn boot_windows(image_handle: Handle, entry: &BootEntry) -> Status {
     };
     
     drop(device_path_protocol);
-    match uefi::boot::start_image(loaded_image_handle) {
+    let status = match uefi::boot::start_image(loaded_image_handle) {
         Ok(_) => Status::SUCCESS,
-        Err(e) => {
-            let _ = uefi::boot::unload_image(loaded_image_handle);
-            e.status()
-        }
-    }
+        Err(e) => e.status(),
+    };
+    let _ = uefi::boot::unload_image(loaded_image_handle);
+    status
 }
 
 /// Boot a Linux entry using the EFI handover protocol or EFISTUB
@@ -63,10 +60,8 @@ pub fn boot_linux(image_handle: Handle, entry: &BootEntry) -> Status {
         None => return Status::NOT_FOUND,
     };
     
-    if entry.has_sha256 {
-        if !crate::crypto::verify_hash(&buffer, &entry.sha256) {
-            return Status::SECURITY_VIOLATION;
-        }
+    if entry.has_sha256 && !crate::crypto::verify_hash(&buffer, &entry.sha256) {
+        return Status::SECURITY_VIOLATION;
     }
     
     if let Err(e) = crate::crypto::verify_secure_boot(&buffer) {
@@ -97,32 +92,32 @@ pub fn boot_linux(image_handle: Handle, entry: &BootEntry) -> Status {
     }
     
     let mut cmdline_ptr: Option<core::ptr::NonNull<u8>> = None;
-    if !final_cmdline.is_empty() {
-        if let Ok(mut loaded_image) = uefi::boot::open_protocol_exclusive::<LoadedImage>(loaded_image_handle) {
-            let cmdline_utf16: Vec<u16> = final_cmdline.encode_utf16().chain(core::iter::once(0)).collect();
-            let size = cmdline_utf16.len() * 2;
-            
-            if let Ok(ptr) = uefi::boot::allocate_pool(uefi::boot::MemoryType::LOADER_DATA, size) {
-                unsafe {
-                    core::ptr::copy_nonoverlapping(cmdline_utf16.as_ptr() as *const u8, ptr.as_ptr(), size);
-                    loaded_image.set_load_options(ptr.as_ptr(), size as u32);
-                }
-                cmdline_ptr = Some(ptr);
+    if !final_cmdline.is_empty() 
+        && let Ok(mut loaded_image) = uefi::boot::open_protocol_exclusive::<LoadedImage>(loaded_image_handle) {
+        let cmdline_utf16: Vec<u16> = final_cmdline.encode_utf16().chain(core::iter::once(0)).collect();
+        let size = cmdline_utf16.len() * 2;
+        
+        if let Ok(ptr) = uefi::boot::allocate_pool(uefi::boot::MemoryType::LOADER_DATA, size) {
+            unsafe {
+                core::ptr::copy_nonoverlapping(cmdline_utf16.as_ptr() as *const u8, ptr.as_ptr(), size);
+                loaded_image.set_load_options(ptr.as_ptr(), size as u32);
             }
+            cmdline_ptr = Some(ptr);
         }
     }
     
     drop(device_path_protocol);
-    match uefi::boot::start_image(loaded_image_handle) {
+    let status = match uefi::boot::start_image(loaded_image_handle) {
         Ok(_) => Status::SUCCESS,
-        Err(e) => {
-            if let Some(ptr) = cmdline_ptr {
-                unsafe {
-                    let _ = uefi::boot::free_pool(ptr);
-                }
-            }
-            let _ = uefi::boot::unload_image(loaded_image_handle);
-            e.status()
+        Err(e) => e.status(),
+    };
+    
+    if let Some(ptr) = cmdline_ptr {
+        unsafe {
+            let _ = uefi::boot::free_pool(ptr);
         }
     }
+    let _ = uefi::boot::unload_image(loaded_image_handle);
+    
+    status
 }

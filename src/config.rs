@@ -5,14 +5,10 @@ use crate::gui::{BootEntry, Color};
 
 pub fn parse_color(val: &str) -> Option<Color> {
     let val = val.trim().trim_start_matches('#');
-    if val.len() == 6 && val.is_ascii() {
-        if let Ok(r) = u8::from_str_radix(&val[0..2], 16) {
-            if let Ok(g) = u8::from_str_radix(&val[2..4], 16) {
-                if let Ok(b) = u8::from_str_radix(&val[4..6], 16) {
-                    return Some(Color { r, g, b });
-                }
-            }
-        }
+    if val.len() == 6 && val.is_ascii() 
+        && let Ok(r) = u8::from_str_radix(&val[0..2], 16)
+        && let (Ok(g), Ok(b)) = (u8::from_str_radix(&val[2..4], 16), u8::from_str_radix(&val[4..6], 16)) {
+        return Some(Color { r, g, b });
     }
     None
 }

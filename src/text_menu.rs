@@ -31,9 +31,9 @@ pub fn show_text_menu(entries: &[BootEntry], timeout: isize, default_entry: usiz
                 
                 for (i, entry) in entries.iter().enumerate() {
                     if i == selected {
-                        let _ = write!(stdout, " > {}\n", entry.name);
+                        let _ = writeln!(stdout, " > {}", entry.name);
                     } else {
-                        let _ = write!(stdout, "   {}\n", entry.name);
+                        let _ = writeln!(stdout, "   {}", entry.name);
                     }
                 }
             });

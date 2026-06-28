@@ -93,6 +93,12 @@ pub struct GuiState<'boot> {
     pub dirty: bool,
 }
 
+impl<'boot> Default for GuiState<'boot> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'boot> GuiState<'boot> {
     pub fn new() -> Self {
         Self {
@@ -363,8 +369,8 @@ impl<'boot> GuiState<'boot> {
                 }
             }
             
-            if let Some(pointer) = &mut self.pointer {
-                if let Ok(Some(state)) = pointer.read_state() {
+            if let Some(pointer) = &mut self.pointer 
+                && let Ok(Some(state)) = pointer.read_state() {
                     input_received = true;
                     
                     let dx = state.relative_movement[0] as isize;
@@ -383,22 +389,17 @@ impl<'boot> GuiState<'boot> {
                         self.dirty = true;
                     }
                     
-                    if state.button[0] {
-                        if !self.entries.is_empty() {
-                            self.running = false;
-                            return Some(self.entries[self.selected].clone());
-                        }
+                    if state.button[0] && !self.entries.is_empty() {
+                        self.running = false;
+                        return Some(self.entries[self.selected].clone());
                     }
                 }
-            }
 
             if !input_received {
                 if timeout_ticks >= 0 {
-                    if ticks >= timeout_ticks {
-                        if !self.entries.is_empty() {
-                            self.running = false;
-                            return Some(self.entries[self.selected].clone());
-                        }
+                    if ticks >= timeout_ticks && !self.entries.is_empty() {
+                        self.running = false;
+                        return Some(self.entries[self.selected].clone());
                     }
                     ticks += 1;
                 }
