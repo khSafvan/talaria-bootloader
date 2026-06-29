@@ -8,7 +8,7 @@
 
 ## ⚡ Overview
 
-Talaria is a lightweight, zero-dependency UEFI boot manager built on a `#![no_std]` Rust architecture. It provides a stunning, icon-based graphical boot menu capable of launching Linux (EFI stub kernels / Unified Kernel Images) or chainloading other EFI executables (like the Windows Boot Manager). 
+Talaria is a lightweight, zero-dependency UEFI boot manager built on a `#![no_std]` Rust architecture. It provides a stunning, icon-based graphical boot menu capable of launching Linux (EFI stub kernels / Unified Kernel Images) or chainloading other EFI executables (like the Windows Boot Manager).
 
 This repository is a fully audited, oxidized Rust fork of the original [Visor-BootManager](https://github.com/IO-ZetZor/Visor-BootManager) by **IO-ZetZor**.
 
@@ -16,7 +16,7 @@ This repository is a fully audited, oxidized Rust fork of the original [Visor-Bo
 
 - **Blazing Fast Handoff:** Engineered with a custom, zero-allocation rendering engine that minimizes heap fragmentation and UEFI API overhead.
 - **True 32-bit ARGB Blending:** Supports seamless, alpha-blended UI components and high-quality OS distro icons (`.bmp`) overlaid dynamically on custom backgrounds.
-- **Zero-Flicker Instant Boot:** Delivers a fully silent, immediate OS handoff when `timeout=0` is configured—no screen flashing or UI initialization artifacts.
+- **Zero-Flicker Instant Boot:** Delivers a fully silent, immediate OS handoff when `timeout=0` is configured no screen flashing or UI initialization artifacts.
 - **Smart Auto-Detection:** Automatically scans the EFI System Partition (ESP) for common Linux and Windows loaders, constructing a boot menu dynamically if no configuration file is present.
 - **Secure Boot Integration:** Actively checks for and integrates with the `shim` `SHIM_LOCK` protocol, ensuring secure OS verification chains remain unbroken.
 - **Mouse & Touchpad Support:** Fully interactive GUI using the UEFI `SimplePointer` protocol.
@@ -54,7 +54,7 @@ The resulting EFI binary will be located at:
 
 ## ⚙️ Configuration
 
-Configuration is managed via a simple text file located at `\EFI\talaria\boot.conf` on your ESP. 
+Configuration is managed via a simple text file located at `\EFI\talaria\boot.conf` on your ESP.
 
 > **Note:** All paths in the configuration file must be relative to the **root** of the ESP and utilize Windows-style backslashes (`\`).
 
@@ -85,12 +85,12 @@ entry {
 
 ## ⌨️ Controls
 
-| Input Device | Action |
-| --- | --- |
-| **Mouse/Touchpad** | Move the cursor and click to select an entry. |
-| **Left / Right** | Cycle between available boot entries. |
-| **Enter** | Boot the currently highlighted entry. |
-| **Escape** | Abort the timeout and boot the default entry immediately. |
+| Input Device       | Action                                                    |
+| ------------------ | --------------------------------------------------------- |
+| **Mouse/Touchpad** | Move the cursor and click to select an entry.             |
+| **Left / Right**   | Cycle between available boot entries.                     |
+| **Enter**          | Boot the currently highlighted entry.                     |
+| **Escape**         | Abort the timeout and boot the default entry immediately. |
 
 ## 🧪 Testing Locally (QEMU)
 
@@ -109,8 +109,8 @@ qemu-system-x86_64 -bios /usr/share/edk2/x64/OVMF.4m.fd -drive file=talaria_test
 
 ## 🤝 Credits & Acknowledgements
 
-* **Visor-BootManager:** This project is a Rust fork and architectural modernization of the original [Visor-BootManager](https://github.com/IO-ZetZor/Visor-BootManager) by [IO-ZetZor](https://github.com/IO-ZetZor). The original C codebase provided the core inspiration and structural foundation.
-* **uefi-rs:** Leveraging the fantastic [uefi-rs](https://github.com/rust-osdev/uefi-rs) crate for memory-safe UEFI bindings.
+- **Visor-BootManager:** This project is a Rust fork and architectural modernization of the original [Visor-BootManager](https://github.com/IO-ZetZor/Visor-BootManager) by [IO-ZetZor](https://github.com/IO-ZetZor). The original C codebase provided the core inspiration and structural foundation.
+- **uefi-rs:** Leveraging the fantastic [uefi-rs](https://github.com/rust-osdev/uefi-rs) crate for memory-safe UEFI bindings.
 
 ## 📄 License
 
